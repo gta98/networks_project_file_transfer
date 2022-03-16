@@ -9,15 +9,19 @@
 #include <stdlib.h>
 #include "winsock2.h"
 
-#define FLAG_DEBUG
+#define FLAG_DEBUG 1
+#define DEFAULT_HOST "127.0.0.1"
+#define DEFAULT_PORT 3490
 
-#ifdef FLAG_DEBUG
+#if FLAG_DEBUG==1
 #define printd printf
 #else
 #define printd(...)
 #endif
 
 #define bit unsigned char
+#define byte unsigned char
+#define ull unsigned long long
 
 // NOTE: parity32, hamming_encode, hamming_decode, print_bin taken from:
 // https://gist.github.com/qsxcv/b2f9976763d52bf1e7fc255f52f05f5b
@@ -84,7 +88,70 @@ uint32_t hamming_decode(uint32_t h)
 void print_bin(uint32_t v)
 {
     for (int i = 31; i >= 0; i--)
-        printf("%d", (v & (1 << i)) >> i);
+        printd("%d", (v & (1 << i)) >> i);
+}
+
+int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_sent) {
+    char buf_send[4], buf_hold[1];
+    FILE* fp = fopen(file_name, "r");
+    *file_size       = 0;
+    *file_total_sent = 0;
+
+    if (fp == NULL) {
+        return 1;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    *file_size = ftell(fp); // bytes
+    // first byte will tell us how many bytes were added to the actual data
+    fseek(fp, 0, SEEK_SET);
+
+    int bytes_missing_for_26 = (26 - (*(file_size+1) % 26)) % 26;
+    int total_bytes_added = 1 + bytes_missing_for_26;
+    int buf_size = (*file_size) + total_bytes_added;
+
+    // yeah sure load it all to memory, why the heck not
+    int attempts;
+    attempts = 10; // :)
+    char* buf = NULL;// malloc((*file_size) * sizeof(char));
+    while (buf == NULL && attempts > 0) { // :)
+        buf = malloc(buf_size * sizeof(char));
+        //return 2;
+        attempts--;
+    }
+    if (attempts == -1) return 2;
+
+    for (int i = 0; i < total_bytes_added; i++) buf[i] = 0;
+    buf[0] = total_bytes_added;
+    for (int i = total_bytes_added; i < buf_size; i++) {
+        fread(buf_hold, sizeof(char), 1, fp);
+        buf[i] = buf_hold[0];
+    }
+    
+    // now, encode and stream it!
+    // buf_size = 26m, => m=buf_size/26, new_buf_size=31*(buf_size/26)
+    *file_total_sent = 31 * (buf_size / 26);
+    attempts = 10; // :)
+    char* buf_enc = NULL;// malloc((*file_size) * sizeof(char));
+    while (buf_enc == NULL && attempts > 0) { // :)
+        buf_enc = malloc((*file_total_sent) * sizeof(char));
+        //return 2;
+        attempts--;
+    }
+    if (attempts == -1) return 3;
+
+    
+
+    send(sock, buf_send, 1, 0);
+
+
+    buf_send[0] = bytes_missing_for_26;
+    send(sock, buf_send, 1, 0);
+
+
+
+
+    fclose(fp);
 }
 
 boolean socket_initialize(WSADATA* wsaData) {
@@ -111,11 +178,11 @@ int main(const int argc, const char *argv[])
     int status;
 
     char* file_name;
-    int file_size, file_total_sent;
+    ull file_size, file_total_sent;
 
     if (argc != 3) {
-        remote_addr = "127.0.0.1";
-        remote_port = (u_short) 3490;
+        remote_addr = DEFAULT_HOST;
+        remote_port = DEFAULT_PORT;
         printd("WARNING: proper syntax is as follows:\n");
         printd("         %s IP PORT\n", argv[0]);
         printd("         an invalid number of arguments was specified, so using IP=%s, PORT=%d\n", remote_addr, remote_port);
@@ -146,9 +213,9 @@ int main(const int argc, const char *argv[])
         }
 
         printf("Sending file...\n");
-        //socket_send_file(file_name, &file_size, &file_total_sent);
-        printf("File length: %d\n", file_size);
-        printf("Bytes sent:  %d\n", file_total_sent);
+        socket_send_file(sock, file_name, &file_size, &file_total_sent);
+        printf("File length: %d bytes\n", file_size);
+        printf("Total sent:  %d bytes\n", file_total_sent);
     }
 
     return 0;
