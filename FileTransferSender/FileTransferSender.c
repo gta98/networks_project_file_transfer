@@ -20,6 +20,10 @@ bit select_bit(u_int x, u_int n) {
     return (x >> (n-1)) & 1;
 }
 
+u_int select_bits(u_int x, u_int msb_inclusive, u_int lsb_inclusive) {
+    return (((1 << (msb_inclusive + 1)) - 1) & x) >> lsb_inclusive;
+}
+
 u_int encode_31_26_3(u_int data) {
     u_int encoded = 0;
     u_int parity_bit_1, parity_bit_2, parity_bit_4, parity_bit_8, parity_bit_16;
@@ -43,6 +47,8 @@ u_int encode_31_26_3(u_int data) {
         }
         encoded = encoded | (parity_bit << (parity_bit_location - 1));
     }
+    //FIXME - if this doesnt seem to work just do it manually...
+    //test against tested hamming code
 
     return encoded;
 }
