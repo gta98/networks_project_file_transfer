@@ -3,7 +3,10 @@
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-#include "stdio.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "winsock2.h"
 
 #define FLAG_DEBUG
@@ -16,41 +19,72 @@
 
 #define bit unsigned char
 
-bit select_bit(u_int x, u_int n) {
-    return (x >> (n-1)) & 1;
+// NOTE: parity32, hamming_encode, hamming_decode, print_bin taken from:
+// https://gist.github.com/qsxcv/b2f9976763d52bf1e7fc255f52f05f5b
+
+// https://graphics.stanford.edu/~seander/bithacks.html#ParityParallel
+static inline bool parity32(uint32_t v)
+{
+    v ^= v >> 16;
+    v ^= v >> 8;
+    v ^= v >> 4;
+    v &= 0xf;
+    return (0x6996 >> v) & 1;
 }
 
-u_int select_bits(u_int x, u_int msb_inclusive, u_int lsb_inclusive) {
-    return (((1 << (msb_inclusive + 1)) - 1) & x) >> lsb_inclusive;
+// Hamming(31, 26) plus total parity at bit 0 for double error detection
+// https://en.wikipedia.org/wiki/Hamming_code#General_algorithm
+uint32_t hamming_encode(uint32_t d)
+{
+    // move data bits into position
+    uint32_t h =
+        (d & 1) << 3 |
+        (d & ((1 << 4) - (1 << 1))) << 4 |
+        (d & ((1 << 11) - (1 << 4))) << 5 |
+        (d & ((1 << 26) - (1 << 11))) << 6;
+    // compute parity bits
+    h |=
+        parity32(h & 0b10101010101010101010101010101010) << 1 |
+        parity32(h & 0b11001100110011001100110011001100) << 2 |
+        parity32(h & 0b11110000111100001111000011110000) << 4 |
+        parity32(h & 0b11111111000000001111111100000000) << 8 |
+        parity32(h & 0b11111111111111110000000000000000) << 16;
+    // overall parity
+    return h | parity32(h);
 }
 
-u_int encode_31_26_3(u_int data) {
-    u_int encoded = 0;
-    u_int parity_bit_1, parity_bit_2, parity_bit_4, parity_bit_8, parity_bit_16;
-
-    // data bits
-    encoded = data;
-    encoded = ((0xFFFFFFFF & encoded) << 2);
-    encoded = ((0xFFFFFFF8 & encoded) << 1) | ((0xFFFFFFFF - 0xFFFFFFF8) & encoded);
-    encoded = ((0xFFFFFF80 & encoded) << 1) | ((0xFFFFFFFF - 0xFFFFFF80) & encoded);
-    encoded = ((0xFFFF8000 & encoded) << 1) | ((0xFFFFFFFF - 0xFFFF8000) & encoded);
-
-    // parity bits
-    int parity_power, parity_bit_location, parity_bit, data_bit_location;
-    for (parity_power = 0; parity_power <= 4; parity_power++) {
-        parity_bit = 0;
-        parity_bit_location = 1 << parity_power;
-        for (data_bit_location = 0; data_bit_location <= 30; data_bit_location++) {
-            if ((((data_bit_location+1) & parity_bit_location) != 0) && (((data_bit_location + 1) & parity_bit_location) != parity_bit_location)) {
-                parity_bit ^= 1&(encoded >> data_bit_location);
-            }
+uint32_t hamming_decode(uint32_t h)
+{
+    // overall parity error
+    bool p = parity32(h);
+    // error syndrome
+    uint32_t i =
+        parity32(h & 0b10101010101010101010101010101010) << 0 |
+        parity32(h & 0b11001100110011001100110011001100) << 1 |
+        parity32(h & 0b11110000111100001111000011110000) << 2 |
+        parity32(h & 0b11111111000000001111111100000000) << 3 |
+        parity32(h & 0b11111111111111110000000000000000) << 4;
+    // correct single error or detect double error
+    if (i != 0) {
+        if (p == 1) { // single error
+            h ^= 1 << i;
         }
-        encoded = encoded | (parity_bit << (parity_bit_location - 1));
+        else { // double error
+            return ~0;
+        }
     }
-    //FIXME - if this doesnt seem to work just do it manually...
-    //test against tested hamming code
+    // remove parity bits
+    return
+        ((h >> 3) & 1) |
+        ((h >> 4) & ((1 << 4) - (1 << 1))) |
+        ((h >> 5) & ((1 << 11) - (1 << 4))) |
+        ((h >> 6) & ((1 << 26) - (1 << 11)));
+}
 
-    return encoded;
+void print_bin(uint32_t v)
+{
+    for (int i = 31; i >= 0; i--)
+        printf("%d", (v & (1 << i)) >> i);
 }
 
 boolean socket_initialize(WSADATA* wsaData) {
