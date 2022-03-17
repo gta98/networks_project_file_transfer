@@ -1,6 +1,4 @@
 #pragma once
-#ifndef H_COMMON_HAMMING
-#define H_COMMON_HAMMING
 
 #include "common_includes.h"
 
@@ -17,4 +15,3 @@ uint32_t hamming_encode(uint32_t d);
 uint32_t hamming_decode(uint32_t h);
 
 void print_bin(uint32_t v);
-#endif

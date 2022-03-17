@@ -1,6 +1,6 @@
 #include "socket_utils.h"
 
-extern boolean socket_initialize(WSADATA* wsaData) {
+boolean socket_initialize(WSADATA* wsaData) {
     return WSAStartup(MAKEWORD(2, 2), wsaData);
 }
 
