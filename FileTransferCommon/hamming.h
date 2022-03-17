@@ -1,9 +1,8 @@
 #pragma once
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include "winsock2.h"
+#ifndef H_COMMON_HAMMING
+#define H_COMMON_HAMMING
+
+#include "common_includes.h"
 
 // NOTE: parity32, hamming_encode, hamming_decode, print_bin taken from:
 // https://gist.github.com/qsxcv/b2f9976763d52bf1e7fc255f52f05f5b
@@ -18,3 +17,4 @@ uint32_t hamming_encode(uint32_t d);
 uint32_t hamming_decode(uint32_t h);
 
 void print_bin(uint32_t v);
+#endif

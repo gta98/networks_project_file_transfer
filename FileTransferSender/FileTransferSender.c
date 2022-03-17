@@ -1,45 +1,11 @@
 // FileTransferSender.c : This file contains the 'main' function. Program execution begins and ends there.
 //
 
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include "FileTransferCommon/common.h"
+#include "FileTransferCommon/socket_utils.h"
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <winsock2.h>
-#include "FileTransferCommon/hamming.h"
-
-#define FLAG_DEBUG 1
 #define DEFAULT_HOST "127.0.0.1"
 #define DEFAULT_PORT 3490
-
-#define STATUS_SUCCESS            0
-#define STATUS_ERR_FILE_READ      1
-#define STATUS_ERR_MALLOC_BUF     2
-#define STATUS_ERR_MALLOC_BUF_ENC 3
-
-#define MSG_ERR_WSASTARTUP     "Error at WSAStartup()\n"
-#define MSG_ERR_CONNECTING     "Error (%d) connecting to %s:%d\n"
-#define MSG_ENTER_FILENAME     "Enter filename: "
-#define MSG_FILE_LENGTH        "File length: %llu bytes\n"
-#define MSG_TOTAL_SENT         "Total sent:  %llu bytes\n"
-#define MSG_ERR_FILE_READ      "ERROR: Could not read file %s\n"
-#define MSG_ERR_MALLOC_BUF     "ERROR: Could not allocate %llu bytes of memory required for storing file content\n"
-#define MSG_ERR_MALLOC_BUF_ENC "ERROR: Could not allocate %llu bytes of memory required for storing encoded file content\n"
-
-#define MAX_FILE_PATH_LENGTH           32767
-#define MAX_PERMITTED_FILE_PATH_LENGTH MAX_FILE_PATH_LENGTH*4
-
-#if FLAG_DEBUG==1
-#define printd printf
-#else
-#define printd(...)
-#endif
-
-#define bit unsigned char
-#define byte unsigned char
-#define ull unsigned long long
 
 int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_sent) {
     char buf_send[4], buf_hold[1];
@@ -109,21 +75,6 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
     return 0;
 }
 
-boolean socket_initialize(WSADATA* wsaData) {
-    return WSAStartup(MAKEWORD(2, 2), wsaData);
-}
-
-int socket_connect(SOCKET* sock, const char* dest, const u_short port) {
-    SOCKADDR_IN sockaddr;
-    int status;
-    sockaddr.sin_addr.s_addr = inet_addr(dest);
-    sockaddr.sin_port = htons(port);
-    sockaddr.sin_family = AF_INET;
-    *sock = socket(AF_INET, SOCK_STREAM, 0);
-    status = connect(*sock, &sockaddr, sizeof(sockaddr));
-    return status;
-}
-
 int main(const int argc, const char *argv[])
 {
     char*   remote_addr;
@@ -150,7 +101,7 @@ int main(const int argc, const char *argv[])
         printf(MSG_ERR_WSASTARTUP);
         return 1;
     }
-
+    hamming_encode(300);
     printd("Attempting connection to %s:%d\n", remote_addr, remote_port);
     status = socket_connect(&sock, remote_addr, remote_port);
     if (status == SOCKET_ERROR) {
