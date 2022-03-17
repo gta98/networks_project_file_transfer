@@ -31,9 +31,10 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
     // at this point, we know what the transmission size will be
     // raw=26m bytes = 8*26m bits, so m=raw.bytes/26=buf_size/26, encoded=8*31m bits = 31m bytes
     if (floor(buf_size / 26) != ceil(buf_size / 26)) return STATUS_ERR_BUF_SIZE;
-    uint64_t expected_transmission_size = 31 * ((uint64_t)(buf_size/26)); //31m
+    uint64_t m = buf_size / 26;
+    uint64_t expected_transmission_size = 31 * m;
 
-    int total_bytes_added_not_sent = total_bytes_added;
+    int total_bytes_added_not_sent = expected_transmission_size;
 
     /*buf_read[0] = total_bytes_added;
     buf_read[1] = (0b1111111100000000000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 56;
@@ -49,11 +50,11 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
     attempts = 10; // :)
     char* buf = NULL;// malloc((*file_size) * sizeof(char));
     while (buf == NULL && attempts > 0) { // :)
-        buf = malloc(buf_size * sizeof(char));
+        buf = malloc(buf_size);
         //return 2;
         attempts--;
     }
-    if (attempts == -1) return 2;
+    if (attempts == -1) return STATUS_ERR_MALLOC_BUF;
 
 
     buf[0] = total_bytes_added;
@@ -71,33 +72,32 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
         fread(buf_hold, sizeof(char), 1, fp);
         buf[i] = buf_hold[0];
     }
-    
-    // now, encode and stream it!
-    // buf_size = 26m bytes, => m=buf_size.bytes/26, new_buf_size=31*(buf_size/26)=31m bytes
-    // buf_size = 8*26m bits, m=buf_size/(26*8)
-    // each 26 bit block gets transformed into a 31 bit block
-    // thus new_buf_size=8*31m bits =31m bytes
-    ull m = buf_size / 26;
-    *file_total_sent = 31 * m;
 
-    attempts = 10; // :)
-    char* buf_enc = NULL;// malloc((*file_size) * sizeof(char));
-    while (buf_enc == NULL && attempts > 0) { // :)
-        buf_enc = malloc((*file_total_sent) * sizeof(char));
-        //return 2;
+    printf("buf: ");
+    for (int i = 0; i < buf_size; i++) {
+        printf("%x ", buf[i]);
+    }
+    printf("\n");
+
+    char* buf_enc = NULL;
+    uint64_t buf_enc_size = 0;
+    attempts = 10;
+    while (buf_enc == NULL) {
+        buf_enc_size = encode_26_block_to_31(&buf_enc, buf, buf_size);
         attempts--;
     }
-    if (attempts == -1) return 3;
+    if (attempts == -1) return STATUS_ERR_MALLOC_BUF_ENC;
 
-    //return 0;
-
-    /*send(sock, buf_send, 1, 0);
-
-
-    buf_send[0] = bytes_missing_for_26;
-    send(sock, buf_send, 1, 0);*/
-
-
+    printf("buf_enc: ");
+    int send_status;
+    for (int i = 0; i < buf_enc_size; i++) {
+        printf("%x ", buf_enc[i]);
+        send_status = send(sock, (buf_enc + i), 1, 0);
+        if (send_status == -1) {
+            i--;
+        }
+    }
+    printf("\n");
 
     free(buf);
     free(buf_enc);
@@ -136,17 +136,23 @@ int main(const int argc, const char *argv[])
     status = socket_connect(&sock, remote_addr, remote_port);
     if (status == SOCKET_ERROR) {
         printf(MSG_ERR_CONNECTING, status, remote_addr, remote_port);
+#if FLAG_IGNORE_SOCKET != 1
         return 1;
+#endif
     }
     printd("Connected to %s:%d\n", remote_addr, remote_port);
 
 
     while (1) {
         printf(MSG_ENTER_FILENAME);
+#if FLAG_SKIP_FILENAME==1
+        strncpy_s(file_name, 100, DEBUG_FILE_PATH, strlen(DEBUG_FILE_PATH));
+#else
         scanf_s("%s", file_name, MAX_PERMITTED_FILE_PATH_LENGTH);
         if (strcmp(file_name, "quit") == 0) {
             return 0;
         }
+#endif
 
         printd("Sending file...\n");
         status = socket_send_file(sock, file_name, &file_size, &file_total_sent);
@@ -168,8 +174,14 @@ int main(const int argc, const char *argv[])
                 printf(MSG_ERR_MALLOC_BUF_ENC, file_total_sent);
                 break;
             }
+            default: {
+                printf("Unknown status: %d", status);
+                break;
+            }
         }
-        
+#if FLAG_SINGLE_ITER==1
+        break;
+#endif
     }
 
     return 0;
