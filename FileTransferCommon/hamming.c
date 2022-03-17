@@ -31,11 +31,12 @@ uint32_t hamming_encode(uint32_t d)
         parity32(h & 0b11111111000000001111111100000000) << 8 |
         parity32(h & 0b11111111111111110000000000000000) << 16;
     // overall parity
-    return h | parity32(h);
+    return h >> 1;// | parity32(h);
 }
 
 uint32_t hamming_decode(uint32_t h)
 {
+    h = (h<<1) | parity32(h);
     // overall parity error
     bool p = parity32(h);
     // error syndrome
@@ -47,12 +48,7 @@ uint32_t hamming_decode(uint32_t h)
         parity32(h & 0b11111111111111110000000000000000) << 4;
     // correct single error or detect double error
     if (i != 0) {
-        if (p == 1) { // single error
-            h ^= 1 << i;
-        }
-        else { // double error
-            return ~0;
-        }
+        h ^= 1 << i;
     }
     // remove parity bits
     return
@@ -91,11 +87,11 @@ uint64_t encode_x_block_to_y(char** dst, char* src, uint64_t src_size, int x, in
         for (int height = 0; height < 8; height++) {
             raw = 0;
             for (int buf_shift = 0; buf_shift < x; buf_shift++) {
-                raw |= ((src[(x * depth) + buf_shift] >> height) & 1) << buf_shift;
+                raw |= ((src[(x * depth) + buf_shift] >> height) & 1) << (x - 1 - buf_shift);
             }
             encoded = (*f_encode)(raw);
             for (int buf_shift = 0; buf_shift < y; buf_shift++) {
-                int this_bit = (encoded >> buf_shift) & 1;
+                int this_bit = (encoded >> (y - 1 - buf_shift)) & 1;
                 (*dst)[(y * depth) + buf_shift] |= this_bit << height;
             }
         }

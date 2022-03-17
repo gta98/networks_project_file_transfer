@@ -90,13 +90,39 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, ull* file_size, 
         }
     }
 
-    buf_recv_raw = NULL;
-    uint64_t raw_size = decode_31_block_to_26(&buf_recv_raw, buf, transmission_size);
-    *file_size = raw_size;
+    printf("buf1: ");
+    for (int i = 0; i < transmission_size; i++) {
+        printf("%x ", buf[i]);
+    }
+    printf("\n");
 
-    printf("buf: ");
-    for (int i = 0; i < raw_size; i++) {
-        printf("%x ", buf_recv_raw[i]);
+    uint64_t m = transmission_size / 31;
+    char* buf_dec = malloc(26 * m);
+    for (int i = 0; i < (26 * m); i++) buf_dec[i] = 0;
+    *file_size = 0;
+    for (int i = 0; i < m; i++) {
+        buf_recv_raw = NULL;
+        for (int j = 0; j < 31; j++) buf_recv_enc[j] = buf[(31 * i) + j];
+        uint64_t raw_size = decode_31_block_to_26(&buf_recv_raw, buf_recv_enc/*buf+(31*i)*/, 31);
+        *file_size = (*file_size) + raw_size;
+        for (int j = 0; j < 26; j++) buf_dec[(i * 26) + j] = buf_recv_raw[j];
+        printf("buf, m=%d: ", m);
+        for (int j = 0; j < (26*m); j++) {
+            printf("%x ", buf_dec[j]);
+        }
+        printf("\n");
+        //free(buf_recv_raw);
+    }
+
+    printf("buf2: ");
+    for (int i = 0; i < (*file_size); i++) {
+        printf("%x ", buf_dec[i]);
+    }
+    printf("\n");
+
+    printf("buf3: ");
+    for (int i = 0; i < (*file_size); i++) {
+        printf("%c", buf_dec[i]);
     }
     printf("\n");
 
