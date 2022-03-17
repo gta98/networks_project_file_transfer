@@ -2,7 +2,6 @@
 //
 
 #include "FileTransferCommon/common.h"
-#include "FileTransferCommon/socket_utils.h"
 
 #define DEFAULT_HOST "127.0.0.1"
 #define DEFAULT_PORT 3490
@@ -101,7 +100,7 @@ int main(const int argc, const char *argv[])
         printf(MSG_ERR_WSASTARTUP);
         return 1;
     }
-    hamming_encode(300);
+
     printd("Attempting connection to %s:%d\n", remote_addr, remote_port);
     status = socket_connect(&sock, remote_addr, remote_port);
     if (status == SOCKET_ERROR) {
