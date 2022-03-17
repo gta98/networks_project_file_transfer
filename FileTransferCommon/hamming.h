@@ -17,4 +17,6 @@ uint32_t hamming_decode(uint32_t h);
 void print_bin(uint32_t v);
 
 uint64_t encode_26_block_to_31(char* dst, char* src, uint64_t src_size);
-void decode_31_block_to_26(char* dst, uint64_t* dst_size, char* src, uint64_t src_size);
+uint64_t decode_31_block_to_26(char* dst, char* src, uint64_t src_size);
+uint64_t encode_x_block_to_y(char** dst, char* src, uint64_t src_size, int x, int y, uint32_t(*f_encode)(uint32_t));
+//void decode_31_block_to_26(char* dst, uint64_t* dst_size, char* src, uint64_t src_size);
