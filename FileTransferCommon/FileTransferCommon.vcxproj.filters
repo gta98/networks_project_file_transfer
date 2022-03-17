@@ -21,6 +21,12 @@
     <ClCompile Include="socket_utils.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="charbuf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="file_utils.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="hamming.h">
@@ -42,6 +48,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="common_debug.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="charbuf.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="file_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

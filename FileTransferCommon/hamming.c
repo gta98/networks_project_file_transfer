@@ -74,11 +74,16 @@ void print_bin(uint32_t v)
 // turns into
 // matrix height = 8, width = 31, depth m
 // encoding is performed on the width
-void encode_26_block_to_31(char* dst, uint64_t* dst_size, char* src, uint64_t src_size) {
+uint64_t encode_26_block_to_31(char** dst, char* src, uint64_t src_size) {
     uint64_t m = src_size / 26;
-    *dst_size = sizeof(char) * 31 * m;
-    *dst = malloc(*dst_size);
-    for (int i = 0; i < (*dst_size); i++) dst[i] = 0;
+    uint64_t dst_size = sizeof(char) * 31 * m;
+    *dst = malloc(dst_size);
+    if (*dst == NULL) {
+        dst_size = 0;
+        return;
+    }
+
+    for (int i = 0; i < (dst_size); i++) (*dst)[i] = 0;
 
     uint32_t raw, encoded;
     for (int depth = 0; depth < m; depth++) {
@@ -86,22 +91,28 @@ void encode_26_block_to_31(char* dst, uint64_t* dst_size, char* src, uint64_t sr
             int mask_for_height = 1 << height;
             raw = 0;
             for (int buf_shift = 0; buf_shift < 26; buf_shift++) {
-                raw |= ((src[(26 * m) + buf_shift] >> height) & 1) << (26 - 1 - buf_shift);
+                raw |= ((src[(26 * depth) + buf_shift] >> height) & 1) << (26 - 1 - buf_shift);
             }
             encoded = hamming_encode(raw);
             for (int buf_shift = 0; buf_shift < 31; buf_shift++) {
                 int this_bit = (encoded >> (31 - 1 - buf_shift)) & 1;
-                dst[(31 * m) + buf_shift] |= this_bit << height;
+                (*dst)[(31 * depth) + buf_shift] |= this_bit << height;
             }
         }
     }
+    return dst_size;
 }
 
-void decode_31_block_to_26(char* dst, uint64_t* dst_size, char* src, uint64_t src_size) {
+void decode_31_block_to_26(char** dst, uint64_t* dst_size, char* src, uint64_t src_size) {
     uint64_t m = src_size / 31;
     *dst_size = sizeof(char) * 26 * m;
-    *dst = malloc(*dst_size);
-    for (int i = 0; i < (*dst_size); i++) dst[i] = 0;
+    **dst = malloc(*dst_size);
+    if (*dst == NULL) {
+        *dst_size = 0;
+        return;
+    }
+
+    for (int i = 0; i < (*dst_size); i++) (*dst)[i] = 0;
 
     uint32_t raw, encoded;
     for (int depth = 0; depth < m; depth++) {
@@ -114,7 +125,7 @@ void decode_31_block_to_26(char* dst, uint64_t* dst_size, char* src, uint64_t sr
             encoded = hamming_decode(raw);
             for (int buf_shift = 0; buf_shift < 26; buf_shift++) {
                 int this_bit = (encoded >> (26 - 1 - buf_shift)) & 1;
-                dst[(26 * m) + buf_shift] |= this_bit << height;
+                (*dst)[(26 * m) + buf_shift] |= this_bit << height;
             }
         }
     }
