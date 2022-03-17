@@ -15,3 +15,5 @@ uint32_t hamming_encode(uint32_t d);
 uint32_t hamming_decode(uint32_t h);
 
 void print_bin(uint32_t v);
+
+void encode_26_buf_to_31(char* dst, char* src, uint64_t src_size);

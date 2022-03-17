@@ -7,7 +7,7 @@
 #define DEFAULT_PORT 3490
 
 int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_sent) {
-    char buf_send[4], buf_hold[1];
+    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4];
     errno_t err;
     FILE* fp;
 
@@ -27,6 +27,22 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
     int bytes_missing_for_26 = (26 - (1+8+(*(file_size)) % 26)) % 26;
     int total_bytes_added = 1 + 8 + bytes_missing_for_26;
     int buf_size = (*file_size) + total_bytes_added;
+    
+    // at this point, we know what the transmission size will be
+    // raw=26m bytes = 8*26m bits, so m=raw.bytes/26=buf_size/26, encoded=8*31m bits = 31m bytes
+    if (floor(buf_size / 26) != ceil(buf_size / 26)) return STATUS_ERR_BUF_SIZE;
+    uint64_t expected_transmission_size = 31 * ((uint64_t)(buf_size/26)); //31m
+
+    int total_bytes_added_not_sent = total_bytes_added;
+
+    /*buf_read[0] = total_bytes_added;
+    buf_read[1] = (0b1111111100000000000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 56;
+    buf_read[2] = (0b0000000011111111000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 48;
+    buf_read[3] = (0b0000000000000000110000000000000000000000000000000000000000000000 & expected_transmission_size) >> 46;
+
+
+    send(sock, buf_read, sizeof(char) * 4, 0);*/
+
 
     // yeah sure load it all to memory, why the heck not
     int attempts;
@@ -39,16 +55,31 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
     }
     if (attempts == -1) return 2;
 
-    for (int i = 0; i < total_bytes_added; i++) buf[i] = 0;
+
     buf[0] = total_bytes_added;
+    buf[1] = (0xFF00000000000000 & expected_transmission_size) >> 56;
+    buf[2] = (0x00FF000000000000 & expected_transmission_size) >> 48;
+    buf[3] = (0x0000FF0000000000 & expected_transmission_size) >> 40;
+    buf[4] = (0x000000FF00000000 & expected_transmission_size) >> 32;
+    buf[5] = (0x00000000FF000000 & expected_transmission_size) >> 24;
+    buf[6] = (0x0000000000FF0000 & expected_transmission_size) >> 16;
+    buf[7] = (0x000000000000FF00 & expected_transmission_size) >>  8;
+    buf[8] = (0x00000000000000FF & expected_transmission_size) >>  0;
+    for (int i = 9; i < total_bytes_added; i++) buf[i] = 0;
     for (int i = total_bytes_added; i < buf_size; i++) {
+        buf_hold[0] = 0;
         fread(buf_hold, sizeof(char), 1, fp);
         buf[i] = buf_hold[0];
     }
     
     // now, encode and stream it!
-    // buf_size = 26m, => m=buf_size/26, new_buf_size=31*(buf_size/26)
-    *file_total_sent = 31 * (buf_size / 26);
+    // buf_size = 26m bytes, => m=buf_size.bytes/26, new_buf_size=31*(buf_size/26)=31m bytes
+    // buf_size = 8*26m bits, m=buf_size/(26*8)
+    // each 26 bit block gets transformed into a 31 bit block
+    // thus new_buf_size=8*31m bits =31m bytes
+    ull m = buf_size / 26;
+    *file_total_sent = 31 * m;
+
     attempts = 10; // :)
     char* buf_enc = NULL;// malloc((*file_size) * sizeof(char));
     while (buf_enc == NULL && attempts > 0) { // :)
