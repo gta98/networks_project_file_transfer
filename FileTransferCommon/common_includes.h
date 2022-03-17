@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <winsock2.h>
+#include <math.h>
 
 #include "common_types.h"
 #include "common_constants.h"
