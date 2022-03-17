@@ -3,35 +3,21 @@
 
 #include "FileTransferCommon/common.h"
 
-int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_sent) {
-    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4];
+int socket_recv_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_recv) {
+    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31];
+    char* buf_recv_raw;
+    int status;
     errno_t err;
     FILE* fp;
 
     *file_size = 0;
-    *file_total_sent = 0;
+    *file_total_recv = 0;
 
-    if (fopen_s(&fp, file_name, "r") != 0) {
-        return STATUS_ERR_FILE_READ;
-    }
+    int bytes_missing_for_26 = 0;// (26 - (1 + 8 + (*(file_size)) % 26)) % 26;
+    int total_bytes_added = 0;
+    int buf_size = 0;// (*file_size) + total_bytes_added;
 
-    fseek(fp, 0, SEEK_END);
-    *file_size = ftell(fp); // bytes
-    // first byte will tell us how many bytes were added to the actual data
-    // next 8 bytes will tell us the size of the transmission
-    fseek(fp, 0, SEEK_SET);
-
-    int bytes_missing_for_26 = (26 - (1 + 8 + (*(file_size)) % 26)) % 26;
-    int total_bytes_added = 1 + 8 + bytes_missing_for_26;
-    int buf_size = (*file_size) + total_bytes_added;
-
-    // at this point, we know what the transmission size will be
-    // raw=26m bytes = 8*26m bits, so m=raw.bytes/26=buf_size/26, encoded=8*31m bits = 31m bytes
-    if (floor(buf_size / 26) != ceil(buf_size / 26)) return STATUS_ERR_BUF_SIZE;
-    uint64_t m = buf_size / 26;
-    uint64_t expected_transmission_size = 31 * m;
-
-    int total_bytes_added_not_sent = expected_transmission_size;
+    uint64_t transmission_size = 0;// 31 * m;
 
     /*buf_read[0] = total_bytes_added;
     buf_read[1] = (0b1111111100000000000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 56;
@@ -40,67 +26,87 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
 
 
     send(sock, buf_read, sizeof(char) * 4, 0);*/
+    for (int i = 0; i < 31; i++) {
+        buf_hold[0] = 0;
+        status = recv(sock, buf_hold, 1, 0);
+        if (status == -1) {
+            i -= 1;
+            continue;
+        }
+        buf_recv_enc[i] = buf_hold[0];
+    }
+    buf_recv_raw = NULL;
+    decode_31_block_to_26(&buf_recv_raw, buf_recv_enc, 31);
 
+    total_bytes_added = buf_recv_raw[0];
+
+    // classic buffer overflow risk
+    transmission_size  = 0;
+    transmission_size |= buf_recv_raw[1] << 56;
+    transmission_size |= buf_recv_raw[2] << 48;
+    transmission_size |= buf_recv_raw[3] << 40;
+    transmission_size |= buf_recv_raw[4] << 32;
+    transmission_size |= buf_recv_raw[5] << 24;
+    transmission_size |= buf_recv_raw[6] << 16;
+    transmission_size |= buf_recv_raw[7] <<  8;
+    transmission_size |= buf_recv_raw[8] <<  0;
+    *file_total_recv = transmission_size;
+
+    int total_bytes_not_recv = transmission_size - 31;
+    int actual_size = transmission_size - total_bytes_added;
+
+    free(buf_recv_raw);
+    buf_recv_raw = NULL;
 
     // yeah sure load it all to memory, why the heck not
     int attempts;
     attempts = 10; // :)
     char* buf = NULL;// malloc((*file_size) * sizeof(char));
     while (buf == NULL && attempts > 0) { // :)
-        buf = malloc(buf_size);
+        buf = malloc(transmission_size);
         //return 2;
         attempts--;
     }
     if (attempts == -1) return STATUS_ERR_MALLOC_BUF;
 
+    for (int i = 0; i < transmission_size; i++) buf[i] = 0;
 
-    buf[0] = total_bytes_added;
-    buf[1] = (0xFF00000000000000 & expected_transmission_size) >> 56;
-    buf[2] = (0x00FF000000000000 & expected_transmission_size) >> 48;
-    buf[3] = (0x0000FF0000000000 & expected_transmission_size) >> 40;
-    buf[4] = (0x000000FF00000000 & expected_transmission_size) >> 32;
-    buf[5] = (0x00000000FF000000 & expected_transmission_size) >> 24;
-    buf[6] = (0x0000000000FF0000 & expected_transmission_size) >> 16;
-    buf[7] = (0x000000000000FF00 & expected_transmission_size) >> 8;
-    buf[8] = (0x00000000000000FF & expected_transmission_size) >> 0;
-    for (int i = 9; i < total_bytes_added; i++) buf[i] = 0;
-    for (int i = total_bytes_added; i < buf_size; i++) {
-        buf_hold[0] = 0;
-        fread(buf_hold, sizeof(char), 1, fp);
-        buf[i] = buf_hold[0];
-    }
+    // classic buffer overflow risk
+    for (int i = 0; i < 31; i++) buf[i] = buf_recv_enc[i];
 
     printf("buf: ");
-    for (int i = 0; i < buf_size; i++) {
+    for (int i = 0; i < 31; i++) {
         printf("%x ", buf[i]);
     }
     printf("\n");
 
-    char* buf_enc = NULL;
-    uint64_t buf_enc_size = 0;
-    attempts = 10;
-    while (buf_enc == NULL) {
-        buf_enc_size = encode_26_block_to_31(&buf_enc, buf, buf_size);
-        attempts--;
+    int idx_in_buf = 32;
+    while (idx_in_buf < transmission_size) {
+        buf_hold[0] = 0;
+        status = recv(sock, buf_hold, 1, 0);
+        if (status != -1) {
+            buf[idx_in_buf] = buf_hold[0];
+            idx_in_buf += 1;
+        }
     }
-    if (attempts == -1) return STATUS_ERR_MALLOC_BUF_ENC;
 
-    printf("buf_enc: ");
-    int send_status;
-    for (int i = 0; i < buf_enc_size; i++) {
-        printf("%x ", buf_enc[i]);
-        send_status = send(sock, (buf_enc + i), 1, 0);
-        if (send_status == -1) {
-            i--;
-        }
-        else {
-            *file_total_sent = *file_total_sent + 1;
-        }
+    buf_recv_raw = NULL;
+    uint64_t raw_size = decode_31_block_to_26(&buf_recv_raw, buf, transmission_size);
+    *file_size = raw_size;
+
+    printf("buf: ");
+    for (int i = 0; i < raw_size; i++) {
+        printf("%x ", buf_recv_raw[i]);
     }
     printf("\n");
 
+    if (fopen_s(&fp, file_name, "w") != 0) {
+        return STATUS_ERR_FILE_READ;
+    }
+    fprintf(fp, buf_recv_raw+total_bytes_added);
+
     free(buf);
-    free(buf_enc);
+    free(buf_recv_raw);
     fclose(fp);
     return 0;
 }
@@ -114,7 +120,7 @@ int main(const int argc, const char* argv[])
     int status;
 
     char file_name[MAX_PERMITTED_FILE_PATH_LENGTH];
-    ull file_size, file_total_sent;
+    ull file_size, file_total_recv;
 
     if (argc != 3) {
         remote_addr = CHANNEL_ADDR;
@@ -147,7 +153,7 @@ int main(const int argc, const char* argv[])
     while (1) {
         printf(MSG_ENTER_FILENAME);
 #if FLAG_SKIP_FILENAME==1
-        strncpy_s(file_name, 100, DEBUG_FILE_PATH, strlen(DEBUG_FILE_PATH));
+        strncpy_s(file_name, 100, DEBUG_FILE_PATH_RECV, strlen(DEBUG_FILE_PATH_RECV));
 #else
         scanf_s("%s", file_name, MAX_PERMITTED_FILE_PATH_LENGTH);
         if (strcmp(file_name, "quit") == 0) {
@@ -155,12 +161,12 @@ int main(const int argc, const char* argv[])
         }
 #endif
 
-        printd("Sending file...\n");
-        status = socket_send_file(sock, file_name, &file_size, &file_total_sent);
+        printd("Receiving file...\n");
+        status = socket_recv_file(sock, file_name, &file_size, &file_total_recv);
         switch (status) {
         case STATUS_SUCCESS: {
             printf(MSG_FILE_LENGTH, file_size);
-            printf(MSG_TOTAL_SENT, file_total_sent);
+            printf(MSG_TOTAL_SENT, file_total_recv);
             break;
         }
         case STATUS_ERR_FILE_READ: {
@@ -172,7 +178,7 @@ int main(const int argc, const char* argv[])
             break;
         }
         case STATUS_ERR_MALLOC_BUF_ENC: {
-            printf(MSG_ERR_MALLOC_BUF_ENC, file_total_sent);
+            printf(MSG_ERR_MALLOC_BUF_ENC, file_total_recv);
             break;
         }
         case STATUS_ERR_BUF_SIZE: {
