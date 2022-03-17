@@ -17,6 +17,7 @@ static inline bool parity32(uint32_t v)
 // https://en.wikipedia.org/wiki/Hamming_code#General_algorithm
 uint32_t hamming_encode(uint32_t d)
 {
+    return d;
     // move data bits into position
     uint32_t h =
         (d & 1) << 3 |
@@ -36,6 +37,7 @@ uint32_t hamming_encode(uint32_t d)
 
 uint32_t hamming_decode(uint32_t h)
 {
+    return h;
     h = (h<<1) | parity32(h);
     // overall parity error
     bool p = parity32(h);
@@ -71,7 +73,7 @@ void print_bin(uint32_t v)
 // matrix height = 8, width = 31, depth m
 // encoding is performed on the width
 
-uint64_t encode_x_block_to_y(char** dst, char* src, uint64_t src_size, int x, int y, uint32_t(*f_encode)(uint32_t)) {
+/*uint64_t encode_x_block_to_y(char** dst, char* src, uint64_t src_size, int x, int y, uint32_t(*f_encode)(uint32_t)) {
     uint64_t m = src_size / x;
     uint64_t dst_size = sizeof(char) * y * m;
     *dst = malloc(dst_size);
@@ -97,12 +99,103 @@ uint64_t encode_x_block_to_y(char** dst, char* src, uint64_t src_size, int x, in
         }
     }
     return dst_size;
+}*/
+
+void encode_x_block_to_y(char dst[], char src[], int x, int y, uint32_t(*f_encode)(uint32_t)) {
+    uint64_t dst_size = sizeof(char) * y;
+
+    for (int i = 0; i < (dst_size); i++) dst[i] = 0;
+
+    for (int height = 0; height < sizeof(char); height++) {
+        int line = 0, encoded = 0;
+        for (int shift = 0; shift < x; shift++) {
+            line <<= 1;
+            line |= (src[shift] >> height) & 1;
+        }
+        encoded = (*f_encode)(line);
+        for (int shift = 0; shift < y; shift++) {
+            int current_bit = (encoded >> shift) & 1;
+            dst[y - 1 - shift] |= current_bit << height;
+        }
+    }
 }
 
-uint64_t encode_26_block_to_31(char** dst, char* src, uint64_t src_size) {
-    return encode_x_block_to_y(dst, src, src_size, 26, 31, &hamming_encode);
+void encode_x_block_to_y_offset(char dst[], char src[], int x, int y, uint32_t(*f_encode)(uint32_t), int src_offset) {
+    uint64_t dst_size = sizeof(char) * y;
+
+    for (int i = 0; i < (dst_size); i++) dst[i] = 0;
+
+    for (int height = 0; height < sizeof(char); height++) {
+        int line = 0, encoded = 0;
+        for (int shift = 0; shift < x; shift++) {
+            line |= ((src[shift+src_offset] >> height) & 1) << (x-1-shift);
+        }
+        encoded = (*f_encode)(line);
+        for (int shift = 0; shift < y; shift++) {
+            int current_bit = (encoded >> shift) & 1;
+            dst[y - 1 - shift] |= current_bit << height;
+        }
+    }
 }
 
-uint64_t decode_31_block_to_26(char** dst, char* src, uint64_t src_size) {
-    return encode_x_block_to_y(dst, src, src_size, 31, 26, &hamming_decode);
+/*void encode_26_block_to_31(char dst[], char src[]) {
+    uint64_t dst_size = sizeof(char) * 31;
+
+    for (int i = 0; i < (dst_size); i++) dst[i] = 0;
+
+    for (int height = 0; height < sizeof(char); height++) {
+        int line = 0, encoded = 0;
+        for (int shift = 0; shift < 26; shift++) {
+            line <<= 1;
+            line |= (src[shift] >> height) & 1;
+        }
+        encoded = hamming_encode(line);
+        for (int shift = 0; shift < 31; shift++) {
+            int current_bit = (encoded >> shift) & 1;
+            dst[31 - 1 - shift] |= current_bit << height;
+        }
+    }
+}*/
+
+void encode_26_block_to_31(char dst[], char src[]) {
+    return encode_x_block_to_y(dst, src, 26, 31, &hamming_encode);
+}
+
+void encode_26_block_to_31_offset(char dst[], char src[], int src_offset) {
+    for (int i = 0; i < 31; i++) dst[i] = 0;
+
+    for (int height = 0; height < 8; height++) {
+        uint32_t line = 0, encoded = 0;
+        for (int shift = 0; shift < 26; shift++) {
+            line |= ((src[shift + src_offset] >> height) & 1) << (26 - 1 - shift);
+        }
+        encoded = hamming_encode(line);
+        for (int shift = 0; shift < 31; shift++) {
+            int current_bit = (encoded >> shift) & 1;
+            if (current_bit != 0) {
+                printf("lala %d\n", shift);
+            }
+            dst[31 - 1 - shift] |= current_bit << height;
+        };
+    }
+}
+
+void decode_31_block_to_26(char dst[], char src[]) {
+    return encode_x_block_to_y(dst, src, 31, 26, &hamming_decode);
+}
+
+void decode_31_block_to_26_offset(char dst[], char src[], int src_offset) {
+    for (int i = 0; i < 26; i++) dst[i] = 0;
+
+    for (int height = 0; height < sizeof(char); height++) {
+        int line = 0, encoded = 0;
+        for (int shift = 0; shift < 31; shift++) {
+            line |= ((src[shift + src_offset] >> height) & 1) << (31 - 1 - shift);
+        }
+        encoded = hamming_decode(line);
+        for (int shift = 0; shift < 26; shift++) {
+            int current_bit = (encoded >> shift) & 1;
+            dst[26 - 1 - shift] |= current_bit << height;
+        }
+    }
 }

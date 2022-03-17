@@ -4,7 +4,7 @@
 #include "FileTransferCommon/common.h"
 
 int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_sent) {
-    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4];
+    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_send_enc[31];
     errno_t err;
     FILE* fp;
 
@@ -76,16 +76,19 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
     }
     printf("\n");
 
-    char* buf_enc = NULL;
+    char* buf_enc = malloc(31);
+    char buf_enc_tmp[31];
     uint64_t buf_enc_size = 0;
-    attempts = 10;
-    while (buf_enc == NULL) {
-        buf_enc_size = encode_26_block_to_31(&buf_enc, buf, buf_size);
-        attempts--;
+    int send_status;
+    for (int i = 0; i < m; i++) {
+        encode_26_block_to_31_offset(buf_enc_tmp, buf, (26*i));
+        for (int j = 0; j < 31; j++) {
+            printf("buf_enc_tmp[%d]=%x\n", j, buf_enc_tmp[j]);
+        }
+        safe_send(sock, buf_enc_tmp, 31);
     }
-    if (attempts == -1) return STATUS_ERR_MALLOC_BUF_ENC;
 
-    printf("buf_enc: ");
+    /*printf("buf_enc: ");
     int send_status;
     for (int i = 0; i < buf_enc_size; i++) {
         printf("%x ", buf_enc[i]);
@@ -97,7 +100,7 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
             *file_total_sent = *file_total_sent + 1;
         }
     }
-    printf("\n");
+    printf("\n");*/
 
     free(buf);
     free(buf_enc);

@@ -4,135 +4,59 @@
 #include "FileTransferCommon/common.h"
 
 int socket_recv_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_recv) {
-    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31];
+    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31], buf_recv_dec[26];
     char* buf_recv_raw;
     int status;
     errno_t err;
     FILE* fp;
-
-    *file_size = 0;
-    *file_total_recv = 0;
-
-    int bytes_missing_for_26 = 0;// (26 - (1 + 8 + (*(file_size)) % 26)) % 26;
-    int total_bytes_added = 0;
-    int buf_size = 0;// (*file_size) + total_bytes_added;
-
-    uint64_t transmission_size = 0;// 31 * m;
-
-    /*buf_read[0] = total_bytes_added;
-    buf_read[1] = (0b1111111100000000000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 56;
-    buf_read[2] = (0b0000000011111111000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 48;
-    buf_read[3] = (0b0000000000000000110000000000000000000000000000000000000000000000 & expected_transmission_size) >> 46;
-
-
-    send(sock, buf_read, sizeof(char) * 4, 0);*/
-    for (int i = 0; i < 31; i++) {
-        buf_hold[0] = 0;
-        status = recv(sock, buf_hold, 1, 0);
-        if (status == -1) {
-            i -= 1;
-            continue;
-        }
-        buf_recv_enc[i] = buf_hold[0];
-    }
-    buf_recv_raw = NULL;
-    decode_31_block_to_26(&buf_recv_raw, buf_recv_enc, 31);
-
-    total_bytes_added = buf_recv_raw[0];
-
-    // classic buffer overflow risk
-    transmission_size  = 0;
-    transmission_size |= buf_recv_raw[1] << 56;
-    transmission_size |= buf_recv_raw[2] << 48;
-    transmission_size |= buf_recv_raw[3] << 40;
-    transmission_size |= buf_recv_raw[4] << 32;
-    transmission_size |= buf_recv_raw[5] << 24;
-    transmission_size |= buf_recv_raw[6] << 16;
-    transmission_size |= buf_recv_raw[7] <<  8;
-    transmission_size |= buf_recv_raw[8] <<  0;
-    *file_total_recv = transmission_size;
-
-    int total_bytes_not_recv = transmission_size - 31;
-    int actual_size = transmission_size - total_bytes_added;
-
-    free(buf_recv_raw);
-    buf_recv_raw = NULL;
-
-    // yeah sure load it all to memory, why the heck not
-    int attempts;
-    attempts = 10; // :)
-    char* buf = NULL;// malloc((*file_size) * sizeof(char));
-    while (buf == NULL && attempts > 0) { // :)
-        buf = malloc(transmission_size);
-        //return 2;
-        attempts--;
-    }
-    if (attempts == -1) return STATUS_ERR_MALLOC_BUF;
-
-    for (int i = 0; i < transmission_size; i++) buf[i] = 0;
-
-    // classic buffer overflow risk
-    for (int i = 0; i < 31; i++) buf[i] = buf_recv_enc[i];
-
-    printf("buf: ");
-    for (int i = 0; i < 31; i++) {
-        printf("%x ", buf[i]);
-    }
-    printf("\n");
-
-    int idx_in_buf = 32;
-    while (idx_in_buf < transmission_size) {
-        buf_hold[0] = 0;
-        status = recv(sock, buf_hold, 1, 0);
-        if (status != -1) {
-            buf[idx_in_buf] = buf_hold[0];
-            idx_in_buf += 1;
-        }
-    }
-
-    printf("buf1: ");
-    for (int i = 0; i < transmission_size; i++) {
-        printf("%x ", buf[i]);
-    }
-    printf("\n");
-
-    uint64_t m = transmission_size / 31;
-    char* buf_dec = malloc(26 * m);
-    for (int i = 0; i < (26 * m); i++) buf_dec[i] = 0;
-    *file_size = 0;
-    for (int i = 0; i < m; i++) {
-        buf_recv_raw = NULL;
-        for (int j = 0; j < 31; j++) buf_recv_enc[j] = buf[(31 * i) + j];
-        uint64_t raw_size = decode_31_block_to_26(&buf_recv_raw, buf_recv_enc/*buf+(31*i)*/, 31);
-        *file_size = (*file_size) + raw_size;
-        for (int j = 0; j < 26; j++) buf_dec[(i * 26) + j] = buf_recv_raw[j];
-        printf("buf, m=%d: ", m);
-        for (int j = 0; j < (26*m); j++) {
-            printf("%x ", buf_dec[j]);
-        }
-        printf("\n");
-        //free(buf_recv_raw);
-    }
-
-    printf("buf2: ");
-    for (int i = 0; i < (*file_size); i++) {
-        printf("%x ", buf_dec[i]);
-    }
-    printf("\n");
-
-    printf("buf3: ");
-    for (int i = 0; i < (*file_size); i++) {
-        printf("%c", buf_dec[i]);
-    }
-    printf("\n");
+    uint64_t transmission_size;
+    int total_bytes_added, actual_size, total_bytes_not_recv;
 
     if (fopen_s(&fp, file_name, "w") != 0) {
         return STATUS_ERR_FILE_READ;
     }
-    fprintf(fp, buf_recv_raw+total_bytes_added);
 
-    free(buf);
-    free(buf_recv_raw);
+    *file_size = 0;
+    *file_total_recv = 0;
+
+
+    safe_recv(sock, buf_recv_enc, 31);
+    decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
+
+    total_bytes_added = buf_recv_dec[0];
+
+    // classic buffer overflow risk
+    transmission_size  = 0;
+    transmission_size |= buf_recv_dec[1] << 56;
+    transmission_size |= buf_recv_dec[2] << 48;
+    transmission_size |= buf_recv_dec[3] << 40;
+    transmission_size |= buf_recv_dec[4] << 32;
+    transmission_size |= buf_recv_dec[5] << 24;
+    transmission_size |= buf_recv_dec[6] << 16;
+    transmission_size |= buf_recv_dec[7] <<  8;
+    transmission_size |= buf_recv_dec[8] <<  0;
+    *file_total_recv = transmission_size;
+
+    total_bytes_not_recv = transmission_size - 31;
+    actual_size = transmission_size - total_bytes_added;
+
+    for (int i = 9; i < 26; i++) {
+        buf_hold[0] = buf_recv_dec[i];
+        fprintf(fp, buf_hold);
+        printf("%x", buf_hold[0]);
+    }
+
+    while (total_bytes_not_recv > 0) {
+        safe_recv(sock, buf_recv_enc, 31);
+        decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
+        for (int i = 0; i < 26; i++) {
+            buf_hold[0] = buf_recv_dec[i];
+            fprintf(fp, buf_hold[0]);
+            printf("%x", buf_hold[0]);
+        }
+        total_bytes_not_recv -= 31;
+    }
+    printf("\n");
     fclose(fp);
     return 0;
 }
