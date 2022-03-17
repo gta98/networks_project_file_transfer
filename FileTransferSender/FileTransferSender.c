@@ -3,9 +3,6 @@
 
 #include "FileTransferCommon/common.h"
 
-#define DEFAULT_HOST "127.0.0.1"
-#define DEFAULT_PORT 3490
-
 int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_sent) {
     char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4];
     errno_t err;
@@ -96,6 +93,9 @@ int socket_send_file(const SOCKET* sock, const char* file_name, ull* file_size, 
         if (send_status == -1) {
             i--;
         }
+        else {
+            *file_total_sent = *file_total_sent + 1;
+        }
     }
     printf("\n");
 
@@ -117,8 +117,8 @@ int main(const int argc, const char *argv[])
     ull file_size, file_total_sent;
 
     if (argc != 3) {
-        remote_addr = DEFAULT_HOST;
-        remote_port = DEFAULT_PORT;
+        remote_addr = CHANNEL_ADDR;
+        remote_port = CHANNEL_PORT_SENDER;
         printd("WARNING: proper syntax is as follows:\n");
         printd("         %s IP PORT\n", argv[0]);
         printd("         an invalid number of arguments was specified, so using IP=%s, PORT=%d\n", remote_addr, remote_port);
@@ -174,8 +174,11 @@ int main(const int argc, const char *argv[])
                 printf(MSG_ERR_MALLOC_BUF_ENC, file_total_sent);
                 break;
             }
+            case STATUS_ERR_BUF_SIZE: {
+                printf(MSG_ERR_BUF_SIZE, file_size);
+            }
             default: {
-                printf("Unknown status: %d", status);
+                printf(MSG_ERR_UNKNOWN, status);
                 break;
             }
         }
