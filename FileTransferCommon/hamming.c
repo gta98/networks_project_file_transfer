@@ -89,14 +89,13 @@ uint64_t encode_x_block_to_y(char** dst, char* src, uint64_t src_size, int x, in
     uint32_t raw, encoded;
     for (int depth = 0; depth < m; depth++) {
         for (int height = 0; height < 8; height++) {
-            int mask_for_height = 1 << height;
             raw = 0;
             for (int buf_shift = 0; buf_shift < x; buf_shift++) {
-                raw |= ((src[(x * depth) + buf_shift] >> height) & 1) << (x - 1 - buf_shift);
+                raw |= ((src[(x * depth) + buf_shift] >> height) & 1) << buf_shift;
             }
             encoded = (*f_encode)(raw);
             for (int buf_shift = 0; buf_shift < y; buf_shift++) {
-                int this_bit = (encoded >> (y - 1 - buf_shift)) & 1;
+                int this_bit = (encoded >> buf_shift) & 1;
                 (*dst)[(y * depth) + buf_shift] |= this_bit << height;
             }
         }
