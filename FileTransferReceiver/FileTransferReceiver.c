@@ -70,7 +70,7 @@ int main(const int argc, const char* argv[])
     int status;
 
     char file_name[MAX_PERMITTED_FILE_PATH_LENGTH];
-    ull file_size, file_total_recv;
+    uint64_t file_size, file_total_recv;
 
     if (argc != 3) {
         remote_addr = CHANNEL_ADDR;
