@@ -3,7 +3,6 @@
 
 #include "FileTransferCommon/common.h"
 
-#pragma warning(disable:4996)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -28,11 +27,11 @@ int main(int argc, char* argv[])
 
 void check_args(int argc, char* argv[])
 {
-    if (argc != 3 || argc != 4) {
+    if ((argc != 3) && (argc != 4)) {
         perror("wrong number of arguments, channel requiers 2 or 3 arguments.");
         exit(EXIT_FAILURE);
     }
-    if (argv[1] != "-r" || argv[1] != "-d") {
+    if ((strcmp(argv[1], "-r") != 0) && (strcmp(argv[1], "-d") != 0)) {
         perror("wrong argument, must choose the noise method");
         exit(EXIT_FAILURE);
     }

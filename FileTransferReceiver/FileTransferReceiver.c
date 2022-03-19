@@ -3,7 +3,7 @@
 
 #include "FileTransferCommon/common.h"
 
-int socket_recv_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_recv) {
+int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_size, uint64_t* file_total_recv) {
     char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31], buf_recv_dec[26];
     char* buf_recv_raw;
     int status;

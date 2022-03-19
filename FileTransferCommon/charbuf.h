@@ -8,7 +8,7 @@ typedef struct {
 	uint8_t cell_size_bits;
 } charbuf_t;
 
-ull  charbuf_select(charbuf_t* buf, uint64_t idx);
+uint64_t  charbuf_select(charbuf_t* buf, uint64_t idx);
 void charbuf_assign(charbuf_t* buf, uint64_t idx, uint64_t value);
 void charbuf_from_sparse_arr(charbuf_t* dst, uint8_t cell_size_bits, char src[], uint64_t src_size);
 
