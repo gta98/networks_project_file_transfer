@@ -13,3 +13,5 @@
 #else
 #define printd(...)
 #endif
+
+#define perror(...) fprintf(stderr, __VA_ARGS__)

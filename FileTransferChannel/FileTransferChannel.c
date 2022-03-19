@@ -1,24 +1,15 @@
 // FileTransferChannel.c : This file contains the 'main' function. Program execution begins and ends there.
 //
 
-#include "stdio.h"
-#include <iostream>
-#include <stdio.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <sys/types.h> 
-#include <limits.h>
-#include "winsock2.h"
-#include <math.h>
+#include "FileTransferCommon/common.h"
 
-#pragma comment(lib, "WS2_32.lib")
 #pragma warning(disable:4996)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
 void check_args(int argc, char* argv[]);
 int is_number(char* string);
-int fake_noise(char* buffer, double p, unsigned int seed);
+int fake_noise_random(char* buffer, double p, unsigned int seed);
 
 int main(int argc, char* argv[])
 {
