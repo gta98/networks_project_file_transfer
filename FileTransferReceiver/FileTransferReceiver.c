@@ -3,7 +3,7 @@
 
 #include "FileTransferCommon/common.h"
 
-int socket_recv_file(const SOCKET* sock, const char* file_name, ull* file_size, ull* file_total_recv) {
+int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_size, uint64_t* file_total_recv) {
     char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31], buf_recv_dec[26];
     char* buf_recv_raw;
     int status;
@@ -70,7 +70,7 @@ int main(const int argc, const char* argv[])
     int status;
 
     char file_name[MAX_PERMITTED_FILE_PATH_LENGTH];
-    ull file_size, file_total_recv;
+    uint64_t file_size, file_total_recv;
 
     if (argc != 3) {
         remote_addr = CHANNEL_ADDR;
