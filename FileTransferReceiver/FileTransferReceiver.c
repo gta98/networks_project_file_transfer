@@ -40,21 +40,34 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     total_bytes_not_recv = transmission_size - 31;
     actual_size = transmission_size - total_bytes_added;
 
-    for (int i = 9; i < 26; i++) {
-        buf_hold[0] = buf_recv_dec[i];
-        fprintf(fp, buf_hold);
-        printf("%x", buf_hold[0]);
+    if (total_bytes_added > 26) {
+        return STATUS_ERR_CORRUPT_ADDED;
+        // alternatively: start from the next block...
     }
+
+    for (int i = 0; i < 9; i++) printf("?? ");
+
+    for (int i = 9; i < total_bytes_added; i++) {
+        printf("?? ");
+    }
+
+    for (int i = total_bytes_added; i < 26; i++) {
+        buf_hold[0] = buf_recv_dec[i];
+        fprintf(fp, "%c", buf_hold[0]);
+        if (buf_hold[0] <= 0xF) printf("0");
+        printf("%x ", buf_hold[0]);
+    }
+    printf("\n");
 
     while (total_bytes_not_recv > 0) {
         safe_recv(sock, buf_recv_enc, 31);
         decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
         for (int i = 0; i < 26; i++) {
             buf_hold[0] = buf_recv_dec[i];
-            printf("prong %x\n", buf_hold[0]);
-            fprintf(fp, buf_hold[0]);
-            printf("%x", buf_hold[0]);
+            fprintf(fp, "%c", buf_hold[0]);
+            printf("%x ", buf_hold[0]);
         }
+        printf("\n");
         total_bytes_not_recv -= 31;
     }
     printf("\n");

@@ -11,6 +11,8 @@
 #define STATUS_ERR_MALLOC_BUF     2
 #define STATUS_ERR_MALLOC_BUF_ENC 3
 #define STATUS_ERR_BUF_SIZE       4
+#define STATUS_ERR_CORRUPT_ADDED  5
+
 
 #define MSG_ERR_WSASTARTUP     "Error at WSAStartup()\n"
 #define MSG_ERR_CONNECTING     "Error (%d) connecting to %s:%d\n"
