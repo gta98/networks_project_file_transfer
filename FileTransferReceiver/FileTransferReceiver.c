@@ -51,6 +51,7 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
         decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
         for (int i = 0; i < 26; i++) {
             buf_hold[0] = buf_recv_dec[i];
+            printf("prong %x\n", buf_hold[0]);
             fprintf(fp, buf_hold[0]);
             printf("%x", buf_hold[0]);
         }

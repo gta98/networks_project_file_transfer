@@ -138,6 +138,94 @@ void encode_x_block_to_y_offset(char dst[], char src[], int x, int y, uint32_t(*
     }
 }
 
+// number of bytes is a multiple of 26 - that we know for sure
+void encode_26_block_to_31(uint8_t dst[31], uint8_t src[26]) {
+    bit row_val_at_idx;
+    int bit_idx_msb, bit_idx_lsb, src_row_idx, dst_row_idx;
+    uint8_t bit_selection_shifted;
+    uint32_t unencoded_column_26b;
+    uint32_t encoded_column_31b;
+
+    // we place the bits later on by using PIPE, which is why we want to start with 0's
+    for (dst_row_idx = 0; dst_row_idx < 31; dst_row_idx++) dst[dst_row_idx] = 0;
+
+    for (bit_idx_msb = 0; bit_idx_msb < 8; bit_idx_msb++) {
+        // bit_idx_msb = bit idx selection, starting from msb (0)
+        // so bit_idx_msb=0 means we want the MSB in each cell, bit_idx_msb=1 means second MSB
+        bit_idx_lsb     = 7 - bit_idx_msb; // this is the distance from the LSB
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // place the current column into unencoded_column_26b, row 0 = LSB, row 25 = MSB
+        ////////////////////////////////////////////////////////////////////////////////
+        unencoded_column_26b = 0;
+        // row 0 = LSB of unencoded column
+        for (src_row_idx = 0; src_row_idx < 26; src_row_idx++) {
+            // get bit #bit_idx_MSB by shifting by bit_idx_lsb, in row #src_row_idx
+            row_val_at_idx = 0x00000001 & (src[src_row_idx] >> bit_idx_lsb);
+            // place it at src_row_idx - so row 0 to row 25 == LSB to MSB
+            unencoded_column_26b |= row_val_at_idx << src_row_idx;
+        }
+
+        encoded_column_31b = hamming_encode(unencoded_column_26b);
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // now move the encoded column into dst, at bit_idx_msb
+        // again, planting LSB at dst[0], and MSB at dst[30]
+        ////////////////////////////////////////////////////////////////////////////////
+        for (dst_row_idx = 0; dst_row_idx < 31; dst_row_idx++) {
+            // again, plant LSB at dst[0], MSB at dst[30]
+            row_val_at_idx = 0x00000001 & (encoded_column_31b >> dst_row_idx);
+            // remember to shift left to the proper position in dst! otherwise it would be planted in the LSB.
+            dst[dst_row_idx] |= row_val_at_idx << bit_idx_lsb;
+        }
+        // that's it for column #bit_idx_msb!
+    }
+    // void
+}
+
+void decode_31_block_to_26(uint8_t dst[26], uint8_t src[31]) {
+    bit row_val_at_idx;
+    int bit_idx_msb, bit_idx_lsb, src_row_idx, dst_row_idx;
+    uint32_t unencoded_column_26b;
+    uint32_t encoded_column_31b;
+
+    // we place the bits later on by using PIPE, which is why we want to start with 0's
+    for (dst_row_idx = 0; dst_row_idx < 26; dst_row_idx++) dst[dst_row_idx] = 0;
+
+    for (bit_idx_msb = 0; bit_idx_msb < 8; bit_idx_msb++) {
+        // bit_idx_msb = bit idx selection, starting from msb (0)
+        // so bit_idx_msb=0 means we want the MSB in each cell, bit_idx_msb=1 means second MSB
+        bit_idx_lsb = 7 - bit_idx_msb; // this is the distance from the LSB
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // place the current column into unencoded_column_26b, row 0 = LSB, row 25 = MSB
+        ////////////////////////////////////////////////////////////////////////////////
+        encoded_column_31b = 0;
+        // row 0 = LSB of ENcoded column
+        for (src_row_idx = 0; src_row_idx < 31; src_row_idx++) {
+            // get bit #bit_idx_MSB by shifting by bit_idx_lsb, in row #src_row_idx
+            row_val_at_idx = 0x00000001 & (src[src_row_idx] >> bit_idx_lsb);
+            // place it at src_row_idx - so row 0 to row 31 == LSB to MSB
+            encoded_column_31b |= row_val_at_idx << src_row_idx;
+        }
+
+        unencoded_column_26b = hamming_decode(encoded_column_31b);
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // now move the encoded column into dst, at bit_idx_msb
+        // again, planting LSB at dst[0], and MSB at dst[25]
+        ////////////////////////////////////////////////////////////////////////////////
+        for (dst_row_idx = 0; dst_row_idx < 26; dst_row_idx++) {
+            // again, plant LSB at dst[0], MSB at dst[30]
+            row_val_at_idx = 0x00000001 & (unencoded_column_26b >> dst_row_idx);
+            // remember to shift left to the proper position in dst! otherwise it would be planted in the LSB.
+            dst[dst_row_idx] |= row_val_at_idx << bit_idx_lsb;
+        }
+        // that's it for column #bit_idx_msb!
+    }
+    // void
+}
+
 /*void encode_26_block_to_31(char dst[], char src[]) {
     uint64_t dst_size = sizeof(char) * 31;
 
@@ -157,45 +245,22 @@ void encode_x_block_to_y_offset(char dst[], char src[], int x, int y, uint32_t(*
     }
 }*/
 
-void encode_26_block_to_31(char dst[], char src[]) {
+/*void encode_26_block_to_31(char dst[], char src[]) {
     return encode_x_block_to_y(dst, src, 26, 31, &hamming_encode);
-}
+}*/
 
 void encode_26_block_to_31_offset(char dst[], char src[], int src_offset) {
-    for (int i = 0; i < 31; i++) dst[i] = 0;
-
-    for (int height = 0; height < 8; height++) {
-        uint32_t line = 0, encoded = 0;
-        for (int shift = 0; shift < 26; shift++) {
-            line |= ((src[shift + src_offset] >> height) & 1) << (26 - 1 - shift);
-        }
-        encoded = hamming_encode(line);
-        for (int shift = 0; shift < 31; shift++) {
-            int current_bit = (encoded >> shift) & 1;
-            if (current_bit != 0) {
-                printf("lala %d\n", shift);
-            }
-            dst[31 - 1 - shift] |= current_bit << height;
-        };
-    }
+    char src_trim[26];
+    for (int i = 0; i < 26; i++) src_trim[i] = src[src_offset + i];
+    encode_26_block_to_31(dst, src_trim);
 }
 
-void decode_31_block_to_26(char dst[], char src[]) {
+/*void decode_31_block_to_26(char dst[], char src[]) {
     return encode_x_block_to_y(dst, src, 31, 26, &hamming_decode);
-}
+}*/
 
 void decode_31_block_to_26_offset(char dst[], char src[], int src_offset) {
-    for (int i = 0; i < 26; i++) dst[i] = 0;
-
-    for (int height = 0; height < sizeof(char); height++) {
-        int line = 0, encoded = 0;
-        for (int shift = 0; shift < 31; shift++) {
-            line |= ((src[shift + src_offset] >> height) & 1) << (31 - 1 - shift);
-        }
-        encoded = hamming_decode(line);
-        for (int shift = 0; shift < 26; shift++) {
-            int current_bit = (encoded >> shift) & 1;
-            dst[26 - 1 - shift] |= current_bit << height;
-        }
-    }
+    char src_trim[31];
+    for (int i = 0; i < 31; i++) src_trim[i] = src[src_offset + i];
+    decode_31_block_to_26(dst, src_trim);
 }

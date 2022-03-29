@@ -70,8 +70,10 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
         buf[i] = buf_hold[0];
     }
 
-    printf("buf: ");
+    printf("original: ");
     for (int i = 0; i < buf_size; i++) {
+        if ((i % 26) == 0) printf("\n");
+        if (buf[i] <= 0xF) printf("0");
         printf("%x ", buf[i]);
     }
     printf("\n");
@@ -80,11 +82,15 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     char buf_enc_tmp[31];
     uint64_t buf_enc_size = 0;
     int send_status;
+    printf("encoded: \n");
     for (int i = 0; i < m; i++) {
         encode_26_block_to_31_offset(buf_enc_tmp, buf, (26*i));
         for (int j = 0; j < 31; j++) {
-            printf("buf_enc_tmp[%d]=%x\n", j, buf_enc_tmp[j]);
+            //printf("buf_enc_tmp[%d]=%x\n", j, buf_enc_tmp[j]);
+            if (buf_enc_tmp[j] <= 0xF) printf("0");
+            printf("%x ", buf_enc_tmp[j]);
         }
+        printf("\n");
         safe_send(sock, buf_enc_tmp, 31);
     }
 
