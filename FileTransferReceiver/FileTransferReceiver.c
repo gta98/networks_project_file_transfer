@@ -25,7 +25,6 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
 
     total_zeros_added = buf_recv_dec[0];
 
-    // classic buffer overflow risk
     transmission_size  = 0;
     transmission_size |= (uint64_t)buf_recv_dec[1] << 56;
     transmission_size |= (uint64_t)buf_recv_dec[2] << 48;
