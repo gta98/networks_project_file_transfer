@@ -4,7 +4,10 @@
 #include "FileTransferCommon/common.h"
 
 int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_size, uint64_t* file_total_sent) {
-    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_send_enc[31];
+    unsigned char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_send_enc[31];
+    uint8_t buf_raw[26], buf_enc[31];
+    uint8_t buf_enc_tmp[31];
+    uint64_t file_size_left;
     errno_t err;
     FILE* fp;
 
@@ -21,9 +24,14 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     // next 8 bytes will tell us the size of the transmission
     fseek(fp, 0, SEEK_SET);
 
-    int bytes_missing_for_26 = (26 - (1+8+(*(file_size)) % 26)) % 26;
-    int total_bytes_added = 1 + 8 + bytes_missing_for_26;
-    int buf_size = (*file_size) + total_bytes_added;
+    uint8_t bytes_missing_for_26 = (26 - ((*file_size) % 26)) % 26;
+    //if (((*file_size) % 26) == 0) bytes_missing_for_26 = 0;
+    //else                          bytes_missing_for_26 = 26 - ((*file_size) % 26);
+    //int bytes_missing_for_26 = (26 - (1+8+(*(file_size)) % 26)) % 26;
+    printf("bytes_missing_for_26=%d\n", bytes_missing_for_26);
+    int total_zeros_added = bytes_missing_for_26;
+    printf("total bytes added: %d\n", total_zeros_added);
+    int buf_size = (*file_size) + 26+total_zeros_added;
     
     // at this point, we know what the transmission size will be
     // raw=26m bytes = 8*26m bits, so m=raw.bytes/26=buf_size/26, encoded=8*31m bits = 31m bytes
@@ -32,84 +40,53 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     uint64_t expected_transmission_size = 31 * m;
 
     int total_bytes_added_not_sent = expected_transmission_size;
+    uint64_t bytes_not_sent = expected_transmission_size;
 
-    /*buf_read[0] = total_bytes_added;
-    buf_read[1] = (0b1111111100000000000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 56;
-    buf_read[2] = (0b0000000011111111000000000000000000000000000000000000000000000000 & expected_transmission_size) >> 48;
-    buf_read[3] = (0b0000000000000000110000000000000000000000000000000000000000000000 & expected_transmission_size) >> 46;
+    /////////////////
+    // send header
+    /////////////////
+    buf_raw[0] = ((uint64_t)(0xFF)) & ((uint64_t)total_zeros_added);
+    buf_raw[1] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 7));
+    buf_raw[2] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 6));
+    buf_raw[3] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 5));
+    buf_raw[4] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 4));
+    buf_raw[5] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 3));
+    buf_raw[6] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 2));
+    buf_raw[7] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 1));
+    buf_raw[8] = ((uint64_t)(0xFF)) & (expected_transmission_size >> (8 * 0));
+    for (int i = 9; i < 26; i++) buf_raw[i] = 0;
+    encode_26_block_to_31(buf_enc, buf_raw);
+    safe_send(sock, buf_enc, 31);
+    bytes_not_sent -= 31;
 
-
-    send(sock, buf_read, sizeof(char) * 4, 0);*/
-
-
-    // yeah sure load it all to memory, why the heck not
-    int attempts;
-    attempts = 10; // :)
-    char* buf = NULL;// malloc((*file_size) * sizeof(char));
-    while (buf == NULL && attempts > 0) { // :)
-        buf = malloc(buf_size);
-        //return 2;
-        attempts--;
-    }
-    if (attempts == -1) return STATUS_ERR_MALLOC_BUF;
-
-
-    buf[0] = total_bytes_added;
-    buf[1] = (0xFF00000000000000 & expected_transmission_size) >> 56;
-    buf[2] = (0x00FF000000000000 & expected_transmission_size) >> 48;
-    buf[3] = (0x0000FF0000000000 & expected_transmission_size) >> 40;
-    buf[4] = (0x000000FF00000000 & expected_transmission_size) >> 32;
-    buf[5] = (0x00000000FF000000 & expected_transmission_size) >> 24;
-    buf[6] = (0x0000000000FF0000 & expected_transmission_size) >> 16;
-    buf[7] = (0x000000000000FF00 & expected_transmission_size) >>  8;
-    buf[8] = (0x00000000000000FF & expected_transmission_size) >>  0;
-    for (int i = 9; i < total_bytes_added; i++) buf[i] = 0;
-    for (int i = total_bytes_added; i < buf_size; i++) {
-        buf_hold[0] = 0;
-        fread(buf_hold, sizeof(char), 1, fp);
-        buf[i] = buf_hold[0];
+    /////////////////////////////////////////
+    // send everything except the last block
+    /////////////////////////////////////////
+    printf("raw: \n");
+    while (bytes_not_sent > 31) {
+        fread(buf_raw, sizeof(uint8_t), 26, fp);
+        for (int i=0; i<26; i++) printf("%02x ", buf_raw[i]);
+        printf("\n");
+        encode_26_block_to_31(buf_enc, buf_raw);
+        safe_send(sock, buf_enc, 31);
+        bytes_not_sent -= 31;
     }
 
-    printf("original: ");
-    for (int i = 0; i < buf_size; i++) {
-        if ((i % 26) == 0) printf("\n");
-        if (buf[i] <= 0xF) printf("0");
-        printf("%x ", buf[i]);
+    ///////////////////////////////////////////////////
+    // send the last block padded by zeros from the end
+    ///////////////////////////////////////////////////
+    if (bytes_not_sent > 0) {
+        fread(buf_raw, sizeof(uint8_t), (uint8_t)26 - bytes_missing_for_26, fp);
+        for (int i = (26-bytes_missing_for_26); i < 26; i++) buf_raw[i] = 0;
+        for (int i = 0; i < 26; i++) printf("%02x ", buf_raw[i]);
+        printf("\n");
+        encode_26_block_to_31(buf_enc, buf_raw);
+        safe_send(sock, buf_enc, 31);
+        bytes_not_sent -= 31;
     }
     printf("\n");
+    printf("closed\n");
 
-    char* buf_enc = malloc(31);
-    char buf_enc_tmp[31];
-    uint64_t buf_enc_size = 0;
-    int send_status;
-    printf("encoded: \n");
-    for (int i = 0; i < m; i++) {
-        encode_26_block_to_31_offset(buf_enc_tmp, buf, (26*i));
-        for (int j = 0; j < 31; j++) {
-            //printf("buf_enc_tmp[%d]=%x\n", j, buf_enc_tmp[j]);
-            if (buf_enc_tmp[j] <= 0xF) printf("0");
-            printf("%x ", buf_enc_tmp[j]);
-        }
-        printf("\n");
-        safe_send(sock, buf_enc_tmp, 31);
-    }
-
-    /*printf("buf_enc: ");
-    int send_status;
-    for (int i = 0; i < buf_enc_size; i++) {
-        printf("%x ", buf_enc[i]);
-        send_status = send(sock, (buf_enc + i), 1, 0);
-        if (send_status == -1) {
-            i--;
-        }
-        else {
-            *file_total_sent = *file_total_sent + 1;
-        }
-    }
-    printf("\n");*/
-
-    free(buf);
-    free(buf_enc);
     fclose(fp);
     return 0;
 }

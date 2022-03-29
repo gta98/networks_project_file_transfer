@@ -249,9 +249,10 @@ void decode_31_block_to_26(uint8_t dst[26], uint8_t src[31]) {
     return encode_x_block_to_y(dst, src, 26, 31, &hamming_encode);
 }*/
 
-void encode_26_block_to_31_offset(char dst[], char src[], int src_offset) {
-    char src_trim[26];
-    for (int i = 0; i < 26; i++) src_trim[i] = src[src_offset + i];
+void encode_26_block_to_31_offset(uint8_t dst[], uint8_t src[], int src_offset) {
+    uint8_t src_trim[26];
+    for (int i = 0; i < 26; i++) src_trim[i] = 0;
+    for (int i = 0; i < 26; i++) src_trim[i] = 0x000000FF & src[src_offset + i];
     encode_26_block_to_31(dst, src_trim);
 }
 
@@ -259,8 +260,8 @@ void encode_26_block_to_31_offset(char dst[], char src[], int src_offset) {
     return encode_x_block_to_y(dst, src, 31, 26, &hamming_decode);
 }*/
 
-void decode_31_block_to_26_offset(char dst[], char src[], int src_offset) {
-    char src_trim[31];
-    for (int i = 0; i < 31; i++) src_trim[i] = src[src_offset + i];
+void decode_31_block_to_26_offset(uint8_t dst[], uint8_t src[], int src_offset) {
+    uint8_t src_trim[31];
+    for (int i = 0; i < 31; i++) src_trim[i] = 0xFF & src[src_offset + i];
     decode_31_block_to_26(dst, src_trim);
 }

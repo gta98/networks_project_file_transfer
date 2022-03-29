@@ -4,13 +4,13 @@
 #include "FileTransferCommon/common.h"
 
 int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_size, uint64_t* file_total_recv) {
-    char buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31], buf_recv_dec[26];
-    char* buf_recv_raw;
+    uint8_t buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31], buf_recv_dec[26];
+    uint8_t* buf_recv_raw;
     int status;
     errno_t err;
     FILE* fp;
     uint64_t transmission_size;
-    int total_bytes_added, actual_size, total_bytes_not_recv;
+    int total_zeros_added, actual_size, total_bytes_not_recv, number_of_zeros;
 
     if (fopen_s(&fp, file_name, "w") != 0) {
         return STATUS_ERR_FILE_READ;
@@ -23,52 +23,50 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     safe_recv(sock, buf_recv_enc, 31);
     decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
 
-    total_bytes_added = buf_recv_dec[0];
+    total_zeros_added = buf_recv_dec[0];
 
     // classic buffer overflow risk
     transmission_size  = 0;
-    transmission_size |= buf_recv_dec[1] << 56;
-    transmission_size |= buf_recv_dec[2] << 48;
-    transmission_size |= buf_recv_dec[3] << 40;
-    transmission_size |= buf_recv_dec[4] << 32;
-    transmission_size |= buf_recv_dec[5] << 24;
-    transmission_size |= buf_recv_dec[6] << 16;
-    transmission_size |= buf_recv_dec[7] <<  8;
-    transmission_size |= buf_recv_dec[8] <<  0;
+    transmission_size |= (uint64_t)buf_recv_dec[1] << 56;
+    transmission_size |= (uint64_t)buf_recv_dec[2] << 48;
+    transmission_size |= (uint64_t)buf_recv_dec[3] << 40;
+    transmission_size |= (uint64_t)buf_recv_dec[4] << 32;
+    transmission_size |= (uint64_t)buf_recv_dec[5] << 24;
+    transmission_size |= (uint64_t)buf_recv_dec[6] << 16;
+    transmission_size |= (uint64_t)buf_recv_dec[7] <<  8;
+    transmission_size |= (uint64_t)buf_recv_dec[8] <<  0;
     *file_total_recv = transmission_size;
 
     total_bytes_not_recv = transmission_size - 31;
-    actual_size = transmission_size - total_bytes_added;
+    actual_size = transmission_size - total_zeros_added;
 
-    if (total_bytes_added > 26) {
+    if (total_zeros_added > 25) {
         return STATUS_ERR_CORRUPT_ADDED;
-        // alternatively: start from the next block...
+        // alternatively: change total_zeros_added to 0...
     }
 
-    for (int i = 0; i < 9; i++) printf("?? ");
-
-    for (int i = 9; i < total_bytes_added; i++) {
-        printf("?? ");
-    }
-
-    for (int i = total_bytes_added; i < 26; i++) {
-        buf_hold[0] = buf_recv_dec[i];
-        fprintf(fp, "%c", buf_hold[0]);
-        if (buf_hold[0] <= 0xF) printf("0");
-        printf("%x ", buf_hold[0]);
-    }
+    for (int i = 0; i < 26; i++) printf("?? ");
     printf("\n");
 
-    while (total_bytes_not_recv > 0) {
+    while (total_bytes_not_recv > 31) {
         safe_recv(sock, buf_recv_enc, 31);
         decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
         for (int i = 0; i < 26; i++) {
             buf_hold[0] = buf_recv_dec[i];
             fprintf(fp, "%c", buf_hold[0]);
-            printf("%x ", buf_hold[0]);
+            printf("%02x ", buf_hold[0]);
         }
         printf("\n");
         total_bytes_not_recv -= 31;
+    }
+    if (total_bytes_not_recv > 0) {
+        safe_recv(sock, buf_recv_enc, 31);
+        decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
+        for (int i = 0; i < (26 - total_zeros_added); i++) {
+            buf_hold[0] = buf_recv_dec[i];
+            fprintf(fp, "%c", buf_hold[0]);
+            printf("%02x ", buf_hold[0]);
+        }
     }
     printf("\n");
     fclose(fp);
