@@ -191,25 +191,24 @@ void open_socket(SOCKET* new_sock, struct sockaddr_in* sock_add, int port)
 {
 	*new_sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*new_sock == -1) {
-		printf("socket creation failed...\n");
+		printf(MSG_ERR_CREATE_SOCK);
 		exit(EXIT_FAILURE);
 	}
-	else
-		printf("Socket successfully created..\n");
+	else printd("Socket successfully created..\n");
 	sock_add->sin_family = AF_INET;
 	sock_add->sin_addr.s_addr = htonl(INADDR_ANY);
 	sock_add->sin_port = htons(port);
 	if ((bind(*new_sock, (SA*)&sock_add, sizeof(sock_add))) != 0) {
-		printf("socket bind failed...\n");
+		printf(MSG_ERR_BIND, port);
 		exit(0);
 	}
 	else
-		printf("Socket successfully binded..\n");
+		printd("Socket successfully binded..\n");
 	if ((listen(*new_sock, 5)) != 0) {
-		printf("Listen failed...\n");
+		printd("Listen failed...\n");
 		exit(0);
 	}
 	else
-		printf("Server listening..\n");
+		printd("Server listening..\n");
 	return;
 }

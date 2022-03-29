@@ -14,8 +14,11 @@
 #define STATUS_ERR_CORRUPT_ADDED  5
 #define STATUS_ERR_CORRUPT_SIZE   6
 
-#define MSG_ERR_WSASTARTUP     "Error at WSAStartup()\n"
-#define MSG_ERR_CONNECTING     "Error (%d) connecting to %s:%d\n"
+#define MSG_ERR_WSASTARTUP     "ERROR: WSAStartup() failed\n"
+#define MSG_ERR_CONNECTING     "ERROR: Code=(%d), in connecting to %s:%d\n"
+#define MSG_ERR_CREATE_SOCK    "ERROR: Could not create new socket\n"
+#define MSG_ERR_BIND           "ERROR: Could not bind to port %d\n"
+#define MSG_SUCCESS_LISTEN     "Listening on port %d\n"
 #define MSG_ENTER_FILENAME     "Enter filename: "
 #define MSG_FILE_LENGTH        "File length: %llu bytes\n"
 #define MSG_TOTAL_SENT         "Total sent:  %llu bytes\n"
