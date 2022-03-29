@@ -1,6 +1,8 @@
 // FileTransferChannel.c : This file contains the 'main' function. Program execution begins and ends there.
 //
 
+
+<<<<<<< HEAD
 #include <stdio.h>
 
 #include <stdlib.h>
@@ -10,15 +12,16 @@
 #include "FileTransferCommon/common.h"
 #include "FileTransferCommon/common_includes.h"
 #pragma warning(disable:4996)
+=======
+>>>>>>> 3e1a85c18746cd2166f769f2f813b4f73bcd07dd
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
 void check_args(int argc, char* argv[]);
 int is_number(char* string);
 int fake_noise_random(char* buffer, double p, unsigned int seed);
-
-
-
+<<<<<<< HEAD
+=======
 
 int main(int argc, char* argv[])
 {
@@ -67,6 +70,7 @@ void check_args(int argc, char* argv[])
         }
 }
 
+>>>>>>> 3e1a85c18746cd2166f769f2f813b4f73bcd07dd
 //checking is string is a number
 
 
@@ -269,4 +273,3 @@ int main(int argc, char* argv[])
     exit(EXIT_SUCCESS);
 
 }
-
