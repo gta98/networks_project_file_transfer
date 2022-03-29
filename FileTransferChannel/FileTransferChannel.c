@@ -120,7 +120,7 @@ void check_args(int argc, char* argv[])
         perror("wrong number of arguments, channel requiers 2 or 3 arguments.");
         exit(EXIT_FAILURE);
     }
-    if (argv[1] != "-r" || argv[1] != "-d") {
+    if ((argv[1] != "-r") && (argv[1] != "-d")) {
         perror("wrong argument, must choose the noise method");
         exit(EXIT_FAILURE);
     }

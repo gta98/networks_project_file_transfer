@@ -10,9 +10,9 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     errno_t err;
     FILE* fp;
     uint64_t transmission_size;
-    int total_zeros_added, actual_size, total_bytes_not_recv, number_of_zeros;
+    int total_zeros_added, total_bytes_not_recv, number_of_zeros;
 
-    if (fopen_s(&fp, file_name, "w") != 0) {
+    if (fopen_s(&fp, file_name, "wb") != 0) {
         return STATUS_ERR_FILE_READ;
     }
 
@@ -37,38 +37,48 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     transmission_size |= (uint64_t)buf_recv_dec[8] <<  0;
     *file_total_recv = transmission_size;
 
+    if ((transmission_size % 31) != 0) {
+        return STATUS_ERR_CORRUPT_SIZE;
+    }
+
+    uint64_t m = floor(transmission_size / (uint64_t)31);
+    *file_size = ((m-1)*26) - total_zeros_added;
+
     total_bytes_not_recv = transmission_size - 31;
-    actual_size = transmission_size - total_zeros_added;
+    m--;
 
     if (total_zeros_added > 25) {
         return STATUS_ERR_CORRUPT_ADDED;
         // alternatively: change total_zeros_added to 0...
     }
 
-    for (int i = 0; i < 26; i++) printf("?? ");
-    printf("\n");
+    for (int i = 0; i < 26; i++) printd("?? ");
+    printd("\n");
 
-    while (total_bytes_not_recv > 31) {
+    while (m > 1) {
         safe_recv(sock, buf_recv_enc, 31);
         decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
         for (int i = 0; i < 26; i++) {
             buf_hold[0] = buf_recv_dec[i];
             fprintf(fp, "%c", buf_hold[0]);
-            printf("%02x ", buf_hold[0]);
+            printd("%02x ", buf_hold[0]);
         }
-        printf("\n");
+        printd("\n");
         total_bytes_not_recv -= 31;
+        m--;
     }
-    if (total_bytes_not_recv > 0) {
+    printd("\nnow adding end\n");
+    if (m == 1) {
         safe_recv(sock, buf_recv_enc, 31);
         decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
         for (int i = 0; i < (26 - total_zeros_added); i++) {
             buf_hold[0] = buf_recv_dec[i];
             fprintf(fp, "%c", buf_hold[0]);
-            printf("%02x ", buf_hold[0]);
+            printd("%02x ", buf_hold[0]);
         }
+        m--;
     }
-    printf("\n");
+    printd("\n");
     fclose(fp);
     return 0;
 }
@@ -144,7 +154,16 @@ int main(const int argc, const char* argv[])
             break;
         }
         case STATUS_ERR_BUF_SIZE: {
-            printf(MSG_ERR_BUF_SIZE, file_size);
+            printf(MSG_ERR_BUF_SIZE);
+            break;
+        }
+        case STATUS_ERR_CORRUPT_SIZE: {
+            printf(MSG_ERR_CORRUPT_SIZE);
+            break;
+        }
+        case STATUS_ERR_CORRUPT_ADDED: {
+            printf(MSG_ERR_CORRUPT_ADDED);
+            break;
         }
         default: {
             printf(MSG_ERR_UNKNOWN, status);

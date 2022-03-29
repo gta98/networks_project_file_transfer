@@ -14,7 +14,7 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     *file_size       = 0;
     *file_total_sent = 0;
 
-    if (fopen_s(&fp, file_name, "r") != 0) {
+    if (fopen_s(&fp, file_name, "rb") != 0) {
         return STATUS_ERR_FILE_READ;
     }
 
@@ -24,18 +24,20 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     // next 8 bytes will tell us the size of the transmission
     fseek(fp, 0, SEEK_SET);
 
+    uint64_t bytes_left_to_read = *file_size;
     uint8_t bytes_missing_for_26 = (26 - ((*file_size) % 26)) % 26;
     //if (((*file_size) % 26) == 0) bytes_missing_for_26 = 0;
     //else                          bytes_missing_for_26 = 26 - ((*file_size) % 26);
     //int bytes_missing_for_26 = (26 - (1+8+(*(file_size)) % 26)) % 26;
-    printf("bytes_missing_for_26=%d\n", bytes_missing_for_26);
+    printd("bytes_missing_for_26=%d\n", bytes_missing_for_26);
     int total_zeros_added = bytes_missing_for_26;
-    printf("total bytes added: %d\n", total_zeros_added);
-    int buf_size = (*file_size) + 26+total_zeros_added;
+    printd("total zeros added: %d\n", total_zeros_added);
+    int buf_size = 26 + ((*file_size) + total_zeros_added);
     
     // at this point, we know what the transmission size will be
     // raw=26m bytes = 8*26m bits, so m=raw.bytes/26=buf_size/26, encoded=8*31m bits = 31m bytes
-    if (floor(buf_size / 26) != ceil(buf_size / 26)) return STATUS_ERR_BUF_SIZE;
+    //if (floor(buf_size / 26) != ceil(buf_size / 26)) return STATUS_ERR_BUF_SIZE;
+    //assert(floor(buf_size / 26) != ceil(buf_size / 26));
     uint64_t m = buf_size / 26;
     uint64_t expected_transmission_size = 31 * m;
 
@@ -58,34 +60,45 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     encode_26_block_to_31(buf_enc, buf_raw);
     safe_send(sock, buf_enc, 31);
     bytes_not_sent -= 31;
+    m--;
 
     /////////////////////////////////////////
     // send everything except the last block
     /////////////////////////////////////////
-    printf("raw: \n");
-    while (bytes_not_sent > 31) {
+    printd("raw: \n");
+    while (bytes_left_to_read > 26) {
         fread(buf_raw, sizeof(uint8_t), 26, fp);
-        for (int i=0; i<26; i++) printf("%02x ", buf_raw[i]);
-        printf("\n");
+        bytes_left_to_read -= 26;
+        for (int i=0; i<26; i++) printd("%02x ", buf_raw[i]);
+        printd("\n");
         encode_26_block_to_31(buf_enc, buf_raw);
         safe_send(sock, buf_enc, 31);
+        (*file_total_sent) += 31;
         bytes_not_sent -= 31;
+        m--;
     }
 
     ///////////////////////////////////////////////////
     // send the last block padded by zeros from the end
     ///////////////////////////////////////////////////
-    if (bytes_not_sent > 0) {
-        fread(buf_raw, sizeof(uint8_t), (uint8_t)26 - bytes_missing_for_26, fp);
+    printd("Entering the danger zone! 26-bytes_missing=%d\n", (uint8_t)26 - bytes_missing_for_26);
+    if (bytes_left_to_read > 0) {
+        //fread(buf_raw, sizeof(uint8_t), bytes_left_to_read, fp);
+        for (int i = 0; i < bytes_left_to_read; i++) {
+            fread(buf_hold, sizeof(uint8_t), 1, fp);
+            buf_raw[i] = buf_hold[0];
+        }
         for (int i = (26-bytes_missing_for_26); i < 26; i++) buf_raw[i] = 0;
-        for (int i = 0; i < 26; i++) printf("%02x ", buf_raw[i]);
-        printf("\n");
+        for (int i = 0; i < 26; i++) printd("%02x ", buf_raw[i]);
+        printd("\n");
         encode_26_block_to_31(buf_enc, buf_raw);
         safe_send(sock, buf_enc, 31);
+        (*file_total_sent) += 31;
         bytes_not_sent -= 31;
+        m--;
     }
-    printf("\n");
-    printf("closed\n");
+    printd("\n");
+    printd("closed\n");
 
     fclose(fp);
     return 0;
@@ -159,9 +172,6 @@ int main(const int argc, const char *argv[])
             case STATUS_ERR_MALLOC_BUF_ENC: {
                 printf(MSG_ERR_MALLOC_BUF_ENC, file_total_sent);
                 break;
-            }
-            case STATUS_ERR_BUF_SIZE: {
-                printf(MSG_ERR_BUF_SIZE, file_size);
             }
             default: {
                 printf(MSG_ERR_UNKNOWN, status);
