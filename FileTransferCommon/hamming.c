@@ -17,7 +17,7 @@ static inline bool parity32(uint32_t v)
 // https://en.wikipedia.org/wiki/Hamming_code#General_algorithm
 uint32_t hamming_encode(uint32_t d)
 {
-    return d;
+    //return d;
     // move data bits into position
     uint32_t h =
         (d & 1) << 3 |
@@ -37,7 +37,7 @@ uint32_t hamming_encode(uint32_t d)
 
 uint32_t hamming_decode(uint32_t h)
 {
-    return h;
+    //return h;
     h = (h<<1) | parity32(h);
     // overall parity error
     bool p = parity32(h);
