@@ -10,24 +10,55 @@
 #pragma warning(disable:4996)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+enum channel_mode_t { DETERMINISTIC = 0, RANDOM = 1 };
 
 void check_args(int argc, char* argv[]);
 int is_number(char* string);
 int fake_noise_random(char* buffer, double p, unsigned int seed);
 void open_socket(SOCKET* new_sock, struct sockaddr_in* sock_add, int port);
 
+int main2(int argc, char* argv[]) {
+	char* remote_addr;
+	u_short remote_port;
+	SOCKET sock;
+	WSADATA wsaData;
+	int status;
+	check_args(argc, argv);
+	if (socket_initialize(&wsaData) != NO_ERROR) {
+		printf(MSG_ERR_WSASTARTUP);
+		return 1;
+	}
+
+
+}
+
 int main(int argc, char* argv[])
 {
-	check_args(argc, argv);
-	WSADATA wsaData;
-	int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (iResult != NO_ERROR)printf(MSG_ERR_WSASTARTUP);
-	SOCKET* sockfd_sender = NULL;
-	SOCKET* sockfd_recv = NULL;
+	int status;
+	SOCKET* sockfd_sender;
+	SOCKET* sockfd_recv;
 	int accept_res_sender, accept_res_recv, len_send, len_recv;
 	struct sockaddr_in sender_addr, receiver_addr, channel_addr;
-	open_socket(sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
-	open_socket(sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER);
+	WSADATA wsaData;
+
+	check_args(argc, argv);
+
+	if (socket_initialize(&wsaData) != NO_ERROR) {
+		printf(MSG_ERR_WSASTARTUP);
+		return 1;
+	}
+
+	status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
+	if (status != STATUS_SUCCESS) {
+		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_SENDER);
+		return status;
+	}
+
+	status = socket_listen(&sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER);
+	if (status != STATUS_SUCCESS) {
+		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_RECEIVER);
+		return status;
+	}
 
 	// socket create and verification
 
@@ -107,7 +138,7 @@ int main(int argc, char* argv[])
 
 void check_args(int argc, char* argv[])
 {
-	if ((argc != 3) && (argc != 4)) {
+	if (!((argc==3) || (argc==4))) {
 		perror("wrong number of arguments, channel requiers 2 or 3 arguments.");
 		exit(EXIT_FAILURE);
 	}
@@ -199,7 +230,7 @@ void open_socket(SOCKET* new_sock, struct sockaddr_in* sock_add, int port)
 	sock_add->sin_addr.s_addr = htonl(INADDR_ANY);
 	sock_add->sin_port = htons(port);
 	if ((bind(*new_sock, (SA*)&sock_add, sizeof(sock_add))) != 0) {
-		printf(MSG_ERR_BIND, port);
+		printf(MSG_ERR_SOCK_BIND, port);
 		exit(0);
 	}
 	else

@@ -145,6 +145,7 @@
     <ClCompile Include="charbuf.c" />
     <ClCompile Include="file_utils.c" />
     <ClCompile Include="hamming.c" />
+    <ClCompile Include="list.c" />
     <ClCompile Include="socket_utils.c" />
   </ItemGroup>
   <ItemGroup>
@@ -156,6 +157,7 @@
     <ClInclude Include="file_utils.h" />
     <ClInclude Include="hamming.h" />
     <ClInclude Include="common.h" />
+    <ClInclude Include="list.h" />
     <ClInclude Include="socket_utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
