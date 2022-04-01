@@ -10,6 +10,9 @@
 #pragma warning(disable:4996)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#define PORT_SENDER "6342"
+#define PORT_RECEIVER "6343"
+
 enum channel_mode_t { DETERMINISTIC = 0, RANDOM = 1 };
 
 void check_args(int argc, char* argv[]);
@@ -48,13 +51,13 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
+	status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER, PORT_SENDER);
 	if (status != STATUS_SUCCESS) {
 		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_SENDER);
 		return status;
 	}
 
-	status = socket_listen(&sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER);
+	status = socket_listen(&sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER, PORT_RECEIVER);
 	if (status != STATUS_SUCCESS) {
 		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_RECEIVER);
 		return status;
@@ -66,9 +69,9 @@ int main(int argc, char* argv[])
 	len_recv = sizeof(&receiver_addr);
 
 	// Accept the data packet from client and verification
-	accept_res_sender = accept(sockfd_sender, (SA*)&sender_addr, &len_send);
-	accept_res_recv = accept(sockfd_recv, (SA*)&receiver_addr, &len_recv);
-
+	accept_res_sender = accept(sockfd_sender, NULL, NULL);
+	accept_res_recv = accept(sockfd_recv, NULL, NULL);
+	printf("Accepting connection with client failed, error %ld\n", WSAGetLastError()); // TODO - change line
 	if (accept_res_sender < 0) {
 		printf("server accept failed...\n");
 		exit(0);
@@ -85,7 +88,7 @@ int main(int argc, char* argv[])
 	int addlen = sizeof(sockfd_recv);
 
 	//==============intialize buffers for messagge and ack============
-	char buffer[2040];
+	char buffer[2040]; 
 	char ack[100];
 
 	//============initialize prameters for select function==============
@@ -99,7 +102,7 @@ int main(int argc, char* argv[])
 		FD_ZERO(&readfds);
 		FD_SET(sockfd_sender, &readfds);
 		FD_SET(sockfd_recv, &readfds);
-		sock_avl = select(sockfd_recv + 1, &readfds, NULL, NULL, &tm);
+		sock_avl = select(max(sockfd_recv, sockfd_sender) +1, &readfds, NULL, NULL, &tm);
 
 		if (sock_avl < 0) {
 			printf("select error. Error\n");
@@ -120,8 +123,7 @@ int main(int argc, char* argv[])
 				flipped_bits += fake_noise_determ(buffer, argv[2]);
 				sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
 			}
-			fprintf(stderr, "sender socket: IP address = 0.0.0.0 port = 6342\nreceiver socket: IP address = 0.0.0.0 port = 6343\nretransmittes %d bytes, flipped %d bits", countTot, flipped_bits);
-			fprintf(stderr, "continue? (yes/no)\n");
+			printf(stderr, "continue? (yes/no)\n");
 			char* next = NULL;
 			sscanf("%s", next);
 			if (next == "no") break;
