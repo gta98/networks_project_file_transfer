@@ -29,7 +29,7 @@ int socket_listen(SOCKET* sock, SOCKADDR_IN* sock_addr, const uint16_t port) {
     else {
         addr.s_addr = *(u_long*)remotehost->h_addr_list[0];
     }
-    sockaddr.sin_addr.s_addr = sock_addr->sin_addr.s_addr;// inet_addr(inet_ntoa(addr)); //this line was derived by other students assignment
+    sockaddr.sin_addr.s_addr = inet_addr(inet_ntoa(addr)); //this line was derived by other students assignment
     sockaddr.sin_port = htons(port);
     sockaddr.sin_family = AF_INET;
     status = bind(*sock, (SOCKADDR_IN*)&sockaddr, sizeof(sockaddr));
@@ -62,7 +62,8 @@ int socket_connect(SOCKET* sock, const char* dest, const u_short port) {
     sockaddr.sin_family = AF_INET;
     *sock = socket(AF_INET, SOCK_STREAM, 0);
     status = connect(*sock, &sockaddr, sizeof(sockaddr));
-    printf("connection with client failed, error %ld\n", WSAGetLastError()); // TODO - change line
+    
+    printd("connection with SERVER failed, error %ld\n", WSAGetLastError());
 
     return status;
 }
@@ -89,7 +90,7 @@ void safe_recv(SOCKET* sock, char* buf, int len) {
 void safe_send(SOCKET* sock, char* buf, int len) {
     char* hold;
     int status;
-    int sent = 0;
+    uint64_t sent = 0;
 
     do {
         hold = malloc(sizeof(char));
@@ -98,8 +99,8 @@ void safe_send(SOCKET* sock, char* buf, int len) {
     while (sent < len) {
         hold[0] = buf[sent];
         status = send(sock, hold, 1, 0);
-        if (status != -1) {
-            sent++;
+        if (status > 0) {
+            sent += 1;
         }
     }
 }

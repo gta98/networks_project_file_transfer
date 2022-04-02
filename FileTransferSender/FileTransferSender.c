@@ -64,7 +64,7 @@ int socket_send_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
 
     /////////////////////////////////////////
     // send everything except the last block
-    /////////////////////////////////////////
+    //////////\///////////////////////////////
     printd("raw: \n");
     while (bytes_left_to_read > 26) {
         fread(buf_raw, sizeof(uint8_t), 26, fp);
@@ -111,6 +111,7 @@ int main(const int argc, const char *argv[])
     SOCKET sock;
     WSADATA wsaData;
     int status;
+    char buf_tmp[1];
 
     char file_name[MAX_PERMITTED_FILE_PATH_LENGTH];
     uint64_t file_size, file_total_sent;
@@ -132,13 +133,19 @@ int main(const int argc, const char *argv[])
     }
 
     printd("Attempting connection to %s:%d\n", remote_addr, remote_port);
-    status = socket_connect(&sock, remote_addr, remote_port);
-    if (status == SOCKET_ERROR) {
-        printf(MSG_ERR_CONNECTING, status, remote_addr, remote_port);
-#if FLAG_IGNORE_SOCKET != 1
-        return 1;
+    while (true) {
+        status = socket_connect(&sock, remote_addr, remote_port);
+#if FLAG_IGNORE_SOCKET == 1
+        break;
 #endif
+        if (status == STATUS_SUCCESS) {
+            break;
+        }
+        /*else {
+            printf(MSG_ERR_CONNECTING, status, remote_addr, remote_port);
+        }*/
     }
+
     printd("Connected to %s:%d\n", remote_addr, remote_port);
 
 
@@ -152,6 +159,22 @@ int main(const int argc, const char *argv[])
             return 0;
         }
 #endif
+
+        // wait for channel to send "ok to send"
+        printd("Waiting for server to give the OK...\n");
+        int is_ok_to_send = 0;
+        while (0){//!is_ok_to_send) {
+            safe_recv(sock, buf_tmp, 1);
+            if (buf_tmp[0] == 1) {
+                // ok
+                is_ok_to_send = 1;
+            }
+            else {
+                is_ok_to_send = 0;
+            }
+        }
+        printd("Got OK\n");
+        
 
         printd("Sending file...\n");
         status = socket_send_file(sock, file_name, &file_size, &file_total_sent);
@@ -178,6 +201,7 @@ int main(const int argc, const char *argv[])
                 break;
             }
         }
+        closesocket(sock);
 #if FLAG_SINGLE_ITER==1
         break;
 #endif

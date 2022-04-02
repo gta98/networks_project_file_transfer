@@ -10,10 +10,8 @@
 #pragma warning(disable:4996)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
-#define PORT_SENDER "6342"
-#define PORT_RECEIVER "6343"
 
-enum channel_mode_t { DETERMINISTIC = 0, RANDOM = 1 };
+enum channel_mode_t { DETERMINISTIC = 0, RANDOM = 1, NONE = 2 };
 
 void check_args(int argc, char* argv[]);
 int is_number(char* string);
@@ -35,6 +33,14 @@ int main2(int argc, char* argv[]) {
 
 }
 
+int sender_OK = 0;
+
+void sigpipe_handler()
+{
+	printf("SIGPIPE caught\n");
+	sender_OK = 0;
+}
+
 int main(int argc, char* argv[])
 {
 	int status;
@@ -43,10 +49,27 @@ int main(int argc, char* argv[])
 	int accept_res_sender, accept_res_recv, len_send, len_recv;
 	struct sockaddr_in sender_addr, receiver_addr, channel_addr;
 	WSADATA wsaData;
+	enum channel_mode_t channel_mode;
 
+main_start:
 	printd("FileTransferChannel initiated\n");
 
-	check_args(argc, argv);
+	if (FLAG_DEBUG == 0) {
+		check_args(argc, argv);
+	}
+
+	if (argc == 1) {
+		channel_mode = NONE;
+	}
+	else if (strcmp(argv[1], "-r") == 0) {
+		channel_mode = RANDOM;
+	}
+	else if (strcmp(argv[1], "-d") == 0) {
+		channel_mode = DETERMINISTIC;
+	}
+
+
+
 
 	if (socket_initialize(&wsaData) != NO_ERROR) {
 		printf(MSG_ERR_WSASTARTUP);
@@ -71,65 +94,111 @@ int main(int argc, char* argv[])
 	len_recv = sizeof(&receiver_addr);
 
 	// Accept the data packet from client and verification
+	
+	// both sender and receiver must be connected at the same time in order for this to work!
+	printd("Waiting for sender - accept()...\n");
 	accept_res_sender = accept(sockfd_sender, NULL, NULL);
+	printd("Waiting for receiver - accept()...\n");
 	accept_res_recv = accept(sockfd_recv, NULL, NULL);
-	printf("Accepting connection with client failed, error %ld\n", WSAGetLastError()); // TODO - change line
-	if (accept_res_sender < 0) {
-		printf("server accept failed...\n");
-		exit(0);
-	}
-	else
-		printf("server accept the client...\n");
-	if (accept_res_recv < 0) {
-		printf("server accept failed...\n");
-		exit(0);
-	}
-	else
-		printf("server accept the client...\n");
 
-	int addlen = sizeof(sockfd_recv);
+	if (accept_res_sender < 0) {
+		printf("Sender is not connected! Aborting.\n");
+	}
+
+	if (accept_res_recv   < 0) {
+		printf("Receiver is not connected! Aborting.\n");
+	}
+
+	if ((accept_res_sender < 0) || (accept_res_recv < 0)) {
+		printf("See error (WSA error): %ld\n", WSAGetLastError());
+		return 1; // FIXME - if this happens, we might wanna just go back to the beginning of the loop
+	}
+	
+	printd("Sender and receiver connected!\n");
+	// at this point, we assume both are connected
+
+	char buf_tell_sender_to_start[1];
+	buf_tell_sender_to_start[0] = 1;
+	safe_send(sockfd_sender, buf_tell_sender_to_start, 1);
+
+	int addlen = sizeof(sockfd_sender);
 
 	//==============intialize buffers for messagge and ack============
-	char buffer[2040]; 
-	char ack[100];
+	char buffer[31]; 
+	//char ack[100];
 
 	//============initialize prameters for select function==============
-	int sock_avl, countTot = 0, cur_count = 0, flipped_bits = 0;
+	int sock_avl;
+	uint64_t countTot = 0, cur_count = 0, flipped_bits = 0;
 	struct timeval tm;
 	tm.tv_sec = 0;
 	tm.tv_usec = 50000;
 	fd_set readfds, writefds;
 	/////////---------------------Tx-RX flow ----------------------------------------------------------------------------------
 	while (1) {
-		FD_ZERO(&readfds);
+		// 
+		/*FD_ZERO(&readfds);
 		FD_SET(sockfd_sender, &readfds);
 		FD_SET(sockfd_recv, &readfds);
 		sock_avl = select(max(sockfd_recv, sockfd_sender) +1, &readfds, NULL, NULL, &tm);
 
 		if (sock_avl < 0) {
-			printf("select error. Error\n");
-			exit(EXIT_FAILURE);
+			printf("Could not select\n");
+			return EXIT_FAILURE;
+		}*/
+
+		if (1) {//FD_ISSET(sockfd_sender, &readfds)) { //receiving data from client
+			cur_count = 1;
+			while (cur_count != 0) {
+				printd("Waiting to receive from sender\n");
+				cur_count = recvfrom(sockfd_sender, buffer, 1, 0, (struct sockaddr*)&sockfd_sender, &addlen);
+				safe_recv(&sockfd_sender, buffer, 1);
+				printd("cur_count = %d\n", cur_count);
+				countTot += cur_count;
+				if (channel_mode == RANDOM) {
+					double probabilty = atoi(argv[2]) / pow(2, 16);
+					if (probabilty > 1) probabilty = 1;
+					flipped_bits += fake_noise_random(buffer, probabilty, atoi(argv[3]));
+					sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
+				}
+				else if (channel_mode == DETERMINISTIC)
+				{
+					flipped_bits += fake_noise_determ(buffer, argv[2]);
+					sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
+				}
+				else if (channel_mode == NONE) {
+					// no noise
+					flipped_bits += 0;
+					sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
+				}
+			}
+
+			closesocket(sockfd_sender);
+			closesocket(sockfd_recv);
+			
+			/*char* next;
+			bit keep_question_loop = 1;
+			bit should_break;
+			while (keep_question_loop) {
+				printf("Continue? (Y/N): \n");
+				scanf_s("%s", &next);
+				if ((strcmp(next, "Y") == 0) || (strcmp(next, "y") == 0)) {
+					should_break = 1;
+					keep_question_loop = 0;
+				} else if ((strcmp(next, "N") == 0) || (strcmp(next, "n") == 0)) {
+					should_break = 0;
+					keep_question_loop = 0;
+				}
+				else {
+					keep_question_loop = 1;
+					printf("Invalid response!\n");
+				}
+			}
+			if (should_break == 1) break;*/
+
 		}
 
-		if (FD_ISSET(sockfd_sender, &readfds)) { //receiving data from client
-			cur_count = recvfrom(sockfd_sender, buffer, 2040, 0, (struct sockaddr*)&sockfd_sender, &addlen);
-			countTot += cur_count;
-			if (argv[1] == "-r") {
-				double probabilty = atoi(argv[2]) / pow(2, 16);
-				if (probabilty > 1) probabilty = 1;
-				flipped_bits += fake_noise_random(buffer, probabilty, atoi(argv[3]));
-				sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
-			}
-			else if (argv[1] == "-d")
-			{
-				flipped_bits += fake_noise_determ(buffer, argv[2]);
-				sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
-			}
-			printf(stderr, "continue? (yes/no)\n");
-			char* next = NULL;
-			sscanf("%s", next);
-			if (next == "no") break;
-		}
+		break;
 
 
 	}
