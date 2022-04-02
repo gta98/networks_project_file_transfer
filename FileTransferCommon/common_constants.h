@@ -17,6 +17,7 @@
 #define STATUS_ERR_SOCK_BIND       8
 #define STATUS_ERR_SOCK_LISTEN     9
 #define STATUS_ERR_SOCK_CONNECT   10
+#define STATUS_SOCK_CLOSED        11
 
 
 #define MSG_ERR_WSASTARTUP     "ERROR: WSAStartup() failed\n"

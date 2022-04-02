@@ -68,11 +68,13 @@ int socket_connect(SOCKET* sock, const char* dest, const u_short port) {
     return status;
 }
 
-void safe_recv(SOCKET* sock, char* buf, int len) {
+int safe_recv(SOCKET* sock, char* buf, int len) {
     char hold[1];
     int left = len;
     int idx;
     int status;
+    uint8_t* buf_ack[1]; // FIXME - move to static var
+    buf_ack[0] = 0b00000001;
 
     for (idx = 0; idx < len; idx++) buf[idx] = 0;
 
@@ -84,13 +86,26 @@ void safe_recv(SOCKET* sock, char* buf, int len) {
             buf[idx] = hold[0];
             left -= 1;
         }
+
+        if (status <= 0) {
+            return STATUS_SOCK_CLOSED;
+        }
+
+        send(sock, buf_ack, 1, 0);
+        
     }
+
+    return STATUS_SUCCESS;
+
+
 }
 
 void safe_send(SOCKET* sock, char* buf, int len) {
     char* hold;
     int status;
     uint64_t sent = 0;
+    uint8_t* buf_ack[1]; // FIXME - move to static var
+    buf_ack[0] = 0b00000001;
 
     do {
         hold = malloc(sizeof(char));
@@ -102,5 +117,13 @@ void safe_send(SOCKET* sock, char* buf, int len) {
         if (status > 0) {
             sent += 1;
         }
+
+        while (recv(sock, hold, 1, 0) != 1) continue;
+        if (hold[0] != buf_ack[0]) {
+            // bad ack
+            return STATUS_SOCK_CLOSED;
+        }
     }
+
+    return STATUS_SUCCESS;
 }

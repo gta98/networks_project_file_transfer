@@ -163,7 +163,7 @@ int main(const int argc, const char *argv[])
         // wait for channel to send "ok to send"
         printd("Waiting for server to give the OK...\n");
         int is_ok_to_send = 0;
-        while (0){//!is_ok_to_send) {
+        while (!is_ok_to_send) {
             safe_recv(sock, buf_tmp, 1);
             if (buf_tmp[0] == 1) {
                 // ok
