@@ -1,11 +1,10 @@
 #include "socket_utils.h"
-#define PORT_SENDER "6342"
-#define PORT_RECEIVER "6343"
+
 boolean socket_initialize(WSADATA* wsaData) {
     return WSAStartup(MAKEWORD(2, 2), wsaData);
 }
 
-int socket_listen(SOCKET* sock, SOCKADDR_IN* sock_addr, const uint16_t port, char* port_id) {
+int socket_listen(SOCKET* sock, SOCKADDR_IN* sock_addr, const uint16_t port) {
     int status;
     SOCKADDR_IN sockaddr;
     char host_name[100];
@@ -23,14 +22,14 @@ int socket_listen(SOCKET* sock, SOCKADDR_IN* sock_addr, const uint16_t port, cha
     if ((*sock) == -1) {
         return STATUS_ERR_SOCK_CREATE;
     }
-    remotehost = gethostbyname(host_name);
+    remotehost =  gethostbyname(host_name);
     if (remotehost == NULL) {
         printf("ERROR with remotehost name");
     }
     else {
         addr.s_addr = *(u_long*)remotehost->h_addr_list[0];
     }
-    sockaddr.sin_addr.s_addr = inet_addr(inet_ntoa(addr)); //this line was derived by other students assignment
+    sockaddr.sin_addr.s_addr = sock_addr->sin_addr.s_addr;// inet_addr(inet_ntoa(addr)); //this line was derived by other students assignment
     sockaddr.sin_port = htons(port);
     sockaddr.sin_family = AF_INET;
     status = bind(*sock, (SOCKADDR_IN*)&sockaddr, sizeof(sockaddr));
@@ -41,15 +40,18 @@ int socket_listen(SOCKET* sock, SOCKADDR_IN* sock_addr, const uint16_t port, cha
     if ((listen(*sock, SOCKET_BACKLOG)) < 0) {
         return STATUS_ERR_SOCK_LISTEN;
     }
-    if (port_id == PORT_SENDER)
+    char* port_id = malloc(sizeof(char) * 8);
+    sprintf_s(port_id, sizeof(char) * 8, "%d", port);
+    
+    if (port == CHANNEL_PORT_SENDER)
     {
-        printf("sender socket: IP Adress =  %s Port = %s\n", inet_ntoa(sockaddr.sin_addr), PORT_SENDER);
+        printf("sender socket: IP Adress =  %s Port = %d\n", inet_ntoa(sockaddr.sin_addr), CHANNEL_PORT_SENDER);
     }
-    else if (port_id == PORT_RECEIVER)
+    else if (port == CHANNEL_PORT_RECEIVER)
     {
-        printf("receiver socket: IP Adress =  %s Port = %s\n", inet_ntoa(sockaddr.sin_addr), PORT_RECEIVER);
+        printf("receiver socket: IP Adress =  %s Port = %d\n", inet_ntoa(sockaddr.sin_addr), CHANNEL_PORT_RECEIVER);
     }
-        return STATUS_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 int socket_connect(SOCKET* sock, const char* dest, const u_short port) {

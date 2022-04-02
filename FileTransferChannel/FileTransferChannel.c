@@ -44,6 +44,8 @@ int main(int argc, char* argv[])
 	struct sockaddr_in sender_addr, receiver_addr, channel_addr;
 	WSADATA wsaData;
 
+	printd("FileTransferChannel initiated\n");
+
 	check_args(argc, argv);
 
 	if (socket_initialize(&wsaData) != NO_ERROR) {
@@ -51,13 +53,13 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER, PORT_SENDER);
+	status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
 	if (status != STATUS_SUCCESS) {
 		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_SENDER);
 		return status;
 	}
 
-	status = socket_listen(&sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER, PORT_RECEIVER);
+	status = socket_listen(&sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER);
 	if (status != STATUS_SUCCESS) {
 		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_RECEIVER);
 		return status;
