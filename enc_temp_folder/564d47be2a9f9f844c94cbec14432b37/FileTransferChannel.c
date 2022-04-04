@@ -176,10 +176,10 @@ int main(int argc, char* argv[])
 					}
 					else if (channel_mode == NONE) {
 						// no noise
-						//if (!already_inserted_one_error) {
-						//	buffer[3] ^= 8;
-						//	already_inserted_one_error = 1;
-						//}
+						if (!already_inserted_one_error) {
+							buffer[3] ^= 8;
+							already_inserted_one_error = 1;
+						}
 						flipped_bits += 0;
 						send(accept_res_recv, buffer, cur_count, 0);
 					}
