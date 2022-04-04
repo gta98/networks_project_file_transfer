@@ -29,6 +29,8 @@
 #define MSG_ENTER_FILENAME     "Enter filename: "
 #define MSG_FILE_LENGTH        "File length: %llu bytes\n"
 #define MSG_TOTAL_SENT         "Total sent:  %llu bytes\n"
+#define MSG_TOTAL_RECV         "Total received:  %llu bytes\n"
+#define MSG_CORRECTED_ERRORS   "Detected and corrected %d error(s)\n"
 #define MSG_ERR_FILE_READ      "ERROR: Could not read file %s\n"
 #define MSG_ERR_MALLOC_BUF     "ERROR: Could not allocate %llu bytes of memory required for storing file content\n"
 #define MSG_ERR_MALLOC_BUF_ENC "ERROR: Could not allocate %llu bytes of memory required for storing encoded file content\n"

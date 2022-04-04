@@ -35,8 +35,9 @@ uint32_t hamming_encode(uint32_t d)
     return h >> 1;// | parity32(h);
 }
 
-uint32_t hamming_decode(uint32_t h)
+uint32_t hamming_decode(uint32_t h, bit* detected_error)
 {
+    *detected_error = 0;
     if (FLAG_HAMMING_DIS) return h;
     h = (h<<1) | parity32(h);
     // overall parity error
@@ -50,6 +51,8 @@ uint32_t hamming_decode(uint32_t h)
         parity32(h & 0b11111111111111110000000000000000) << 4;
     // correct single error or detect double error
     if (i != 0) {
+        // detected error
+        *detected_error = 1;
         h ^= 1 << i;
     }
     // remove parity bits
@@ -183,11 +186,13 @@ void encode_26_block_to_31(uint8_t dst[31], uint8_t src[26]) {
     // void
 }
 
-void decode_31_block_to_26(uint8_t dst[26], uint8_t src[31]) {
+void decode_31_block_to_26(uint8_t dst[26], uint8_t src[31], bit* detected_error) {
     bit row_val_at_idx;
     int bit_idx_msb, bit_idx_lsb, src_row_idx, dst_row_idx;
     uint32_t unencoded_column_26b;
     uint32_t encoded_column_31b;
+    bit detected_error_tmp = 0;
+    *detected_error = 0;
 
     // we place the bits later on by using PIPE, which is why we want to start with 0's
     for (dst_row_idx = 0; dst_row_idx < 26; dst_row_idx++) dst[dst_row_idx] = 0;
@@ -209,7 +214,8 @@ void decode_31_block_to_26(uint8_t dst[26], uint8_t src[31]) {
             encoded_column_31b |= row_val_at_idx << src_row_idx;
         }
 
-        unencoded_column_26b = hamming_decode(encoded_column_31b);
+        unencoded_column_26b = hamming_decode(encoded_column_31b, &detected_error_tmp);
+        *detected_error |= detected_error_tmp;
 
         ////////////////////////////////////////////////////////////////////////////////
         // now move the encoded column into dst, at bit_idx_msb
@@ -263,5 +269,5 @@ void encode_26_block_to_31_offset(uint8_t dst[], uint8_t src[], int src_offset) 
 void decode_31_block_to_26_offset(uint8_t dst[], uint8_t src[], int src_offset) {
     uint8_t src_trim[31];
     for (int i = 0; i < 31; i++) src_trim[i] = 0xFF & src[src_offset + i];
-    decode_31_block_to_26(dst, src_trim);
+    //decode_31_block_to_26(dst, src_trim);
 }

@@ -3,7 +3,7 @@
 
 #include "FileTransferCommon/common.h"
 
-int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_size, uint64_t* file_total_recv) {
+int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_size, uint64_t* file_total_recv, bit* detected_error_result) {
     uint8_t buf_send[4], buf_hold[1], buf_encode[4], buf_read[4], buf_recv_enc[31], buf_recv_dec[26];
     uint8_t* buf_recv_raw;
     int status;
@@ -11,6 +11,8 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     FILE* fp;
     uint64_t transmission_size;
     int total_zeros_added, total_bytes_not_recv, number_of_zeros;
+    bit detected_error = 0;
+    bit detected_error_tmp = 0;
 
     if (fopen_s(&fp, file_name, "wb") != 0) {
         return STATUS_ERR_FILE_READ;
@@ -21,7 +23,8 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
 
 
     safe_recv(sock, buf_recv_enc, 31);
-    decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
+    decode_31_block_to_26(buf_recv_dec, buf_recv_enc, &detected_error_tmp);
+    detected_error |= detected_error_tmp;
 
     total_zeros_added = buf_recv_dec[0];
 
@@ -56,7 +59,8 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
 
     while (m > 1) {
         safe_recv(sock, buf_recv_enc, 31);
-        decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
+        decode_31_block_to_26(buf_recv_dec, buf_recv_enc, &detected_error_tmp);
+        detected_error |= detected_error_tmp;
         for (int i = 0; i < 26; i++) {
             buf_hold[0] = buf_recv_dec[i];
             fprintf(fp, "%c", buf_hold[0]);
@@ -69,7 +73,8 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
     printd("\nnow adding end\n");
     if (m == 1) {
         safe_recv(sock, buf_recv_enc, 31);
-        decode_31_block_to_26(buf_recv_dec, buf_recv_enc);
+        decode_31_block_to_26(buf_recv_dec, buf_recv_enc, &detected_error_tmp);
+        detected_error |= detected_error_tmp;
         for (int i = 0; i < (26 - total_zeros_added); i++) {
             buf_hold[0] = buf_recv_dec[i];
             fprintf(fp, "%c", buf_hold[0]);
@@ -78,6 +83,7 @@ int socket_recv_file(const SOCKET* sock, const char* file_name, uint64_t* file_s
         m--;
     }
     printd("\n");
+    *detected_error_result = detected_error;
     fclose(fp);
     return 0;
 }
@@ -89,6 +95,7 @@ int main(const int argc, const char* argv[])
     SOCKET sock;
     WSADATA wsaData;
     int status;
+    bit detected_error = 0;
 
     char file_name[MAX_PERMITTED_FILE_PATH_LENGTH];
     uint64_t file_size, file_total_recv;
@@ -133,11 +140,12 @@ int main(const int argc, const char* argv[])
 #endif
 
         printd("Receiving file...\n");
-        status = socket_recv_file(sock, file_name, &file_size, &file_total_recv);
+        status = socket_recv_file(sock, file_name, &file_size, &file_total_recv, &detected_error);
         switch (status) {
         case STATUS_SUCCESS: {
             printf(MSG_FILE_LENGTH, file_size);
-            printf(MSG_TOTAL_SENT, file_total_recv);
+            printf(MSG_TOTAL_RECV, file_total_recv);
+            printf(MSG_CORRECTED_ERRORS, detected_error);
             break;
         }
         case STATUS_ERR_FILE_READ: {
