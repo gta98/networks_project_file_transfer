@@ -91,7 +91,7 @@ int safe_recv(SOCKET* sock, char* buf, int len) {
             return STATUS_SOCK_CLOSED;
         }
 
-        send(sock, buf_ack, 1, 0);
+        //send(sock, buf_ack, 1, 0);
         
     }
 
@@ -118,11 +118,11 @@ void safe_send(SOCKET* sock, char* buf, int len) {
             sent += 1;
         }
 
-        while (recv(sock, hold, 1, 0) != 1) continue;
-        if (hold[0] != buf_ack[0]) {
-            // bad ack
-            return STATUS_SOCK_CLOSED;
-        }
+        //while (recv(sock, hold, 1, 0) != 1) continue;
+        //if (hold[0] != buf_ack[0]) {
+        //    // bad ack
+        //    return STATUS_SOCK_CLOSED;
+        //}
     }
 
     return STATUS_SUCCESS;

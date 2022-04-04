@@ -51,8 +51,24 @@ int main(int argc, char* argv[])
 	WSADATA wsaData;
 	enum channel_mode_t channel_mode;
 
+	char buf_tell_sender_to_start[1];
+	buf_tell_sender_to_start[0] = 1;
+	// safe_send(sockfd_sender, buf_tell_sender_to_start, 1);
 
-main_start:
+	int addlen = sizeof(sockfd_sender);
+
+	//==============intialize buffers for messagge and ack============
+	char buffer[31];
+	//char ack[100];
+
+	//============initialize prameters for select function==============
+	int sock_avl;
+	uint64_t countTot = 0, cur_count = 0, flipped_bits = 0;
+	struct timeval tm;
+	tm.tv_sec = 0;
+	tm.tv_usec = 50000;
+	fd_set readfds, writefds;
+
 	printd("FileTransferChannel initiated\n");
 
 	if (FLAG_DEBUG == 0) {
@@ -70,80 +86,63 @@ main_start:
 	}
 
 
-
-
-	if (socket_initialize(&wsaData) != NO_ERROR) {
-		printf(MSG_ERR_WSASTARTUP);
-		return 1;
-	}
-	sockfd_sender = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sockfd_sender == INVALID_SOCKET){
-		printf("Error, invalid socket\n");
-	}
-	sockfd_recv = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sockfd_recv == INVALID_SOCKET) {
-		printf("Error, invalid socket\n");
-	}
-	status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
-	if (status != STATUS_SUCCESS) {
-		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_SENDER);
-		return status;
-	}
-
-	status = socket_listen(&sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER);
-	if (status != STATUS_SUCCESS) {
-		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_RECEIVER);
-		return status;
-	}
-
-	// socket create and verification
-
-	len_send = sizeof(&sender_addr);
-	len_recv = sizeof(&receiver_addr);
-
-	// Accept the data packet from client and verification
-	
-	// both sender and receiver must be connected at the same time in order for this to work!
-	printd("Waiting for sender - accept()...\n");
-	accept_res_sender = accept(sockfd_sender, NULL, NULL);
-	printd("Waiting for receiver - accept()...\n");
-	accept_res_recv = accept(sockfd_recv, NULL, NULL);
-
-	if (accept_res_sender < 0) {
-		printf("Sender is not connected! Aborting.\n");
-	}
-
-	if (accept_res_recv   < 0) {
-		printf("Receiver is not connected! Aborting.\n");
-	}
-
-	if ((accept_res_sender < 0) || (accept_res_recv < 0)) {
-		printf("See error (WSA error): %ld\n", WSAGetLastError());
-		return 1; // FIXME - if this happens, we might wanna just go back to the beginning of the loop
-	}
-	
-	printd("Sender and receiver connected!\n");
-	// at this point, we assume both are connected
-
-	char buf_tell_sender_to_start[1];
-	buf_tell_sender_to_start[0] = 1;
-	// safe_send(sockfd_sender, buf_tell_sender_to_start, 1);
-
-	int addlen = sizeof(sockfd_sender);
-
-	//==============intialize buffers for messagge and ack============
-	char buffer[31]; 
-	//char ack[100];
-
-	//============initialize prameters for select function==============
-	int sock_avl;
-	uint64_t countTot = 0, cur_count = 0, flipped_bits = 0;
-	struct timeval tm;
-	tm.tv_sec = 0;
-	tm.tv_usec = 50000;
-	fd_set readfds, writefds;
 	/////////---------------------Tx-RX flow ----------------------------------------------------------------------------------
 	while (1) {
+
+
+		if (socket_initialize(&wsaData) != NO_ERROR) {
+			printf(MSG_ERR_WSASTARTUP);
+			return 1;
+		}
+		sockfd_sender = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		if (sockfd_sender == INVALID_SOCKET){
+			printf("Error, invalid socket\n");
+		}
+		sockfd_recv = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		if (sockfd_recv == INVALID_SOCKET) {
+			printf("Error, invalid socket\n");
+		}
+		status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
+		if (status != STATUS_SUCCESS) {
+			printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_SENDER);
+			return status;
+		}
+
+		status = socket_listen(&sockfd_recv, &channel_addr, CHANNEL_PORT_RECEIVER);
+		if (status != STATUS_SUCCESS) {
+			printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_RECEIVER);
+			return status;
+		}
+
+		// socket create and verification
+		len_send = sizeof(&sender_addr);
+		len_recv = sizeof(&receiver_addr);
+
+		// Accept the data packet from client and verification
+	
+		// both sender and receiver must be connected at the same time in order for this to work!
+		printd("Waiting for sender - accept()...\n");
+		accept_res_sender = accept(sockfd_sender, NULL, NULL);
+		printd("Waiting for receiver - accept()...\n");
+		accept_res_recv = accept(sockfd_recv, NULL, NULL);
+
+		if (accept_res_sender < 0) {
+			printf("Sender is not connected! Aborting.\n");
+		}
+
+		if (accept_res_recv   < 0) {
+			printf("Receiver is not connected! Aborting.\n");
+		}
+
+		if ((accept_res_sender < 0) || (accept_res_recv < 0)) {
+			printf("See error (WSA error): %ld\n", WSAGetLastError());
+			return 1; // FIXME - if this happens, we might wanna just go back to the beginning of the loop
+		}
+	
+		printd("Sender and receiver connected!\n");
+		// at this point, we assume both are connected
+
+
 		// 
 		//FD_ZERO(&readfds);
 		//FD_SET(sockfd_sender, &readfds);
@@ -159,7 +158,7 @@ main_start:
 				cur_count = 1;
 				while (cur_count != 0) {
 					printd("Waiting to receive from sender\n");
-					cur_count = recv(sockfd_sender, buffer, 1, 31, 0);
+					cur_count = recv(accept_res_sender, &buffer, 31, 0);
 					//safe_recv(&sockfd_sender, buffer, 1);
 					printd("cur_count = %d\n", cur_count);
 					countTot += cur_count;
@@ -167,33 +166,35 @@ main_start:
 						double probabilty = atoi(argv[2]) / pow(2, 16);
 						if (probabilty > 1) probabilty = 1;
 						flipped_bits += fake_noise_random(buffer, probabilty, atoi(argv[3]));
-						send(sockfd_recv, buffer, cur_count, 0);
+						send(accept_res_recv, buffer, cur_count, 0);
 					}
 					else if (channel_mode == DETERMINISTIC)
 					{
 						flipped_bits += fake_noise_determ(buffer, argv[2]);
-						send(sockfd_recv, buffer, cur_count, 0);
+						send(accept_res_recv, buffer, cur_count, 0);
 					}
 					else if (channel_mode == NONE) {
 						// no noise
 						flipped_bits += 0;
-						send(sockfd_recv, buffer, cur_count, 0);
+						send(accept_res_recv, buffer, cur_count, 0);
 					}
 			}
+			closesocket(accept_res_sender);
+			closesocket(accept_res_recv);
 			closesocket(sockfd_sender);
 			closesocket(sockfd_recv);
 			
-			/*char* next;
+			char next;
 			bit keep_question_loop = 1;
 			bit should_break;
 			while (keep_question_loop) {
-				printf("Continue? (Y/N): \n");
-				scanf_s("%s", &next);
-				if ((strcmp(next, "Y") == 0) || (strcmp(next, "y") == 0)) {
-					should_break = 1;
-					keep_question_loop = 0;
-				} else if ((strcmp(next, "N") == 0) || (strcmp(next, "n") == 0)) {
+				printf("Continue? (Y/N): ");
+				scanf("%c", &next);
+				if ((next=='Y') || (next=='y')) {
 					should_break = 0;
+					keep_question_loop = 0;
+				} else if ((next=='N') || (next=='n')) {
+					should_break = 1;
 					keep_question_loop = 0;
 				}
 				else {
@@ -201,11 +202,9 @@ main_start:
 					printf("Invalid response!\n");
 				}
 			}
-			if (should_break == 1) break;*/
+			if (should_break == 1) break;
 
 		}
-
-		break;
 
 
 	}
