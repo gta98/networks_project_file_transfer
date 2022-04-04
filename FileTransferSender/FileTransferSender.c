@@ -159,7 +159,7 @@ int main(const int argc, const char *argv[])
             return 0;
         }
 #endif
-
+/*
         // wait for channel to send "ok to send"
         printd("Waiting for server to give the OK...\n");
         int is_ok_to_send = 0;
@@ -175,7 +175,7 @@ int main(const int argc, const char *argv[])
         }
         printd("Got OK\n");
         
-
+        */
         printd("Sending file...\n");
         status = socket_send_file(sock, file_name, &file_size, &file_total_sent);
         switch (status) {

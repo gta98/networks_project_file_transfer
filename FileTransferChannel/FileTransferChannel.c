@@ -44,12 +44,13 @@ void sigpipe_handler()
 int main(int argc, char* argv[])
 {
 	int status;
-	SOCKET* sockfd_sender;
-	SOCKET* sockfd_recv;
+	SOCKET sockfd_sender = INVALID_SOCKET;
+	SOCKET sockfd_recv = INVALID_SOCKET;
 	int accept_res_sender, accept_res_recv, len_send, len_recv;
 	struct sockaddr_in sender_addr, receiver_addr, channel_addr;
 	WSADATA wsaData;
 	enum channel_mode_t channel_mode;
+
 
 main_start:
 	printd("FileTransferChannel initiated\n");
@@ -75,7 +76,14 @@ main_start:
 		printf(MSG_ERR_WSASTARTUP);
 		return 1;
 	}
-
+	sockfd_sender = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sockfd_sender == INVALID_SOCKET){
+		printf("Error, invalid socket\n");
+	}
+	sockfd_recv = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sockfd_recv == INVALID_SOCKET) {
+		printf("Error, invalid socket\n");
+	}
 	status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
 	if (status != STATUS_SUCCESS) {
 		printf(MSG_ERR_SOCK_LISTEN, CHANNEL_PORT_SENDER);
@@ -119,7 +127,7 @@ main_start:
 
 	char buf_tell_sender_to_start[1];
 	buf_tell_sender_to_start[0] = 1;
-	safe_send(sockfd_sender, buf_tell_sender_to_start, 1);
+	// safe_send(sockfd_sender, buf_tell_sender_to_start, 1);
 
 	int addlen = sizeof(sockfd_sender);
 
@@ -137,42 +145,41 @@ main_start:
 	/////////---------------------Tx-RX flow ----------------------------------------------------------------------------------
 	while (1) {
 		// 
-		/*FD_ZERO(&readfds);
-		FD_SET(sockfd_sender, &readfds);
-		FD_SET(sockfd_recv, &readfds);
-		sock_avl = select(max(sockfd_recv, sockfd_sender) +1, &readfds, NULL, NULL, &tm);
+		//FD_ZERO(&readfds);
+		//FD_SET(sockfd_sender, &readfds);
+		//FD_SET(sockfd_recv, &readfds);
+		//sock_avl = select(max(sockfd_recv, sockfd_sender) +1, &readfds, NULL, NULL, &tm);
 
-		if (sock_avl < 0) {
-			printf("Could not select\n");
-			return EXIT_FAILURE;
-		}*/
+		//if (sock_avl < 0) {
+		//	printf("Could not select\n");
+		//	return EXIT_FAILURE;
+		//}
 
-		if (1) {//FD_ISSET(sockfd_sender, &readfds)) { //receiving data from client
-			cur_count = 1;
-			while (cur_count != 0) {
-				printd("Waiting to receive from sender\n");
-				cur_count = recvfrom(sockfd_sender, buffer, 1, 0, (struct sockaddr*)&sockfd_sender, &addlen);
-				safe_recv(&sockfd_sender, buffer, 1);
-				printd("cur_count = %d\n", cur_count);
-				countTot += cur_count;
-				if (channel_mode == RANDOM) {
-					double probabilty = atoi(argv[2]) / pow(2, 16);
-					if (probabilty > 1) probabilty = 1;
-					flipped_bits += fake_noise_random(buffer, probabilty, atoi(argv[3]));
-					sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
-				}
-				else if (channel_mode == DETERMINISTIC)
-				{
-					flipped_bits += fake_noise_determ(buffer, argv[2]);
-					sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
-				}
-				else if (channel_mode == NONE) {
-					// no noise
-					flipped_bits += 0;
-					sendto(sockfd_recv, buffer, cur_count, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
-				}
+		if (1) {//if (FD_ISSET(sockfd_sender, &readfds)) { //receiving data from client
+				cur_count = 1;
+				while (cur_count != 0) {
+					printd("Waiting to receive from sender\n");
+					cur_count = recv(sockfd_sender, buffer, 1, 31, 0);
+					//safe_recv(&sockfd_sender, buffer, 1);
+					printd("cur_count = %d\n", cur_count);
+					countTot += cur_count;
+					if (channel_mode == RANDOM) {
+						double probabilty = atoi(argv[2]) / pow(2, 16);
+						if (probabilty > 1) probabilty = 1;
+						flipped_bits += fake_noise_random(buffer, probabilty, atoi(argv[3]));
+						send(sockfd_recv, buffer, cur_count, 0);
+					}
+					else if (channel_mode == DETERMINISTIC)
+					{
+						flipped_bits += fake_noise_determ(buffer, argv[2]);
+						send(sockfd_recv, buffer, cur_count, 0);
+					}
+					else if (channel_mode == NONE) {
+						// no noise
+						flipped_bits += 0;
+						send(sockfd_recv, buffer, cur_count, 0);
+					}
 			}
-
 			closesocket(sockfd_sender);
 			closesocket(sockfd_recv);
 			
@@ -257,21 +264,20 @@ int fake_noise_random(char* buffer, double p, unsigned int seed) {
 	srand(seed);
 	int mask, max_rand = 1 / p, count = 0;
 	int flag = (p == 1 / pow(2, 16));
-	for (int i = 0; i < 2040; i++)
+	for (int i = 0; i < strlen(buffer); i++)
 	{
 		for (int j = 0; j < 8; j++)
 		{
 			mask = pow(2, j);
 			if (rand() % max_rand == 1)// a random lottery with the defined probability for every single bit
 				if (flag == 0) {
-					buffer[i] = (char)(buffer[i] ^ mask);
+					buffer[i] =buffer[i] ^ mask;
 					count++;
 				}
 				else if (flag == 1 && rand() % 2 == 0) {
-					buffer[i] = (char)(buffer[i] ^ mask);
+					buffer[i] = buffer[i] ^ mask;
 					count++;
 				}
-
 		}
 	}
 	return count;
@@ -281,12 +287,17 @@ int fake_noise_determ(char* buffer, int n)
 {
 	int mask = 1;
 	int count = 0;
-	for (int i = 0; i < 2040; i++)
+	for (int i = 0; i < strlen(buffer); i++)
 	{
-		if (i % n == 0) {
-			buffer[i] = (char)(buffer[i] ^ mask);
-			count++;
+		mask = 1;
+		for (int j = 0; j < 8; i++)
+		{
+			if ((8 * i+j) % n == 0) {                 //other student in class helped me with this loop.
+				buffer[i] = (char)(buffer[i] ^ mask);
+				count++;
+			}
 		}
+		mask *= 2;
 	}
 	return count;
 }

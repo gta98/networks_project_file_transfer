@@ -37,7 +37,7 @@ int socket_listen(SOCKET* sock, SOCKADDR_IN* sock_addr, const uint16_t port) {
         return STATUS_ERR_SOCK_BIND;
     }
 
-    if ((listen(*sock, SOCKET_BACKLOG)) < 0) {
+    if ((listen(*sock, SOMAXCONN)) < 0) {
         return STATUS_ERR_SOCK_LISTEN;
     }
     char* port_id = malloc(sizeof(char) * 8);
@@ -62,9 +62,9 @@ int socket_connect(SOCKET* sock, const char* dest, const u_short port) {
     sockaddr.sin_family = AF_INET;
     *sock = socket(AF_INET, SOCK_STREAM, 0);
     status = connect(*sock, &sockaddr, sizeof(sockaddr));
-    
-    printd("connection with SERVER failed, error %ld\n", WSAGetLastError());
-
+    if (status != STATUS_SUCCESS) {
+        printd("connection with SERVER failed, error %ld\n", WSAGetLastError());
+    }
     return status;
 }
 
