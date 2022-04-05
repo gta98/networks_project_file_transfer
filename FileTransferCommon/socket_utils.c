@@ -82,6 +82,7 @@ int safe_recv(SOCKET* sock, char* buf, int len) {
         idx = len - left;
         hold[0] = 0;
         status = recv(sock, hold, 1, 0);
+        if (status == SOCKET_ERROR) { printf(MSG_ERR_RECEIVE); }
         if (status != -1) {
             buf[idx] = hold[0];
             left -= 1;
@@ -114,6 +115,7 @@ void safe_send(SOCKET* sock, char* buf, int len) {
     while (sent < len) {
         hold[0] = buf[sent];
         status = send(sock, hold, 1, 0);
+        if (status == SOCKET_ERROR) { printf(MSG_ERR_SEND); }
         if (status > 0) {
             sent += 1;
         }

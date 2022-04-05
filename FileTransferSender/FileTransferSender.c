@@ -141,9 +141,9 @@ int main(const int argc, const char *argv[])
         if (status == STATUS_SUCCESS) {
             break;
         }
-        /*else {
+        else {
             printf(MSG_ERR_CONNECTING, status, remote_addr, remote_port);
-        }*/
+        }
     }
 
     printd("Connected to %s:%d\n", remote_addr, remote_port);

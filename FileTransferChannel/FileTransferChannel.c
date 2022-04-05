@@ -16,22 +16,9 @@ enum channel_mode_t { DETERMINISTIC = 0, RANDOM = 1, NONE = 2 };
 void check_args(int argc, char* argv[]);
 int is_number(char* string);
 int fake_noise_random(char* buffer, double p, unsigned int seed);
-void open_socket(SOCKET* new_sock, struct sockaddr_in* sock_add, int port);
-
-int main2(int argc, char* argv[]) {
-	char* remote_addr;
-	u_short remote_port;
-	SOCKET sock;
-	WSADATA wsaData;
-	int status;
-	check_args(argc, argv);
-	if (socket_initialize(&wsaData) != NO_ERROR) {
-		printf(MSG_ERR_WSASTARTUP);
-		return 1;
-	}
 
 
-}
+
 
 int sender_OK = 0;
 
@@ -70,7 +57,6 @@ int main(int argc, char* argv[])
 	tm.tv_usec = 50000;
 	fd_set readfds, writefds;
 
-	printd("FileTransferChannel initiated\n");
 
 	if (FLAG_DEBUG == 0) {
 		check_args(argc, argv);
@@ -90,18 +76,17 @@ int main(int argc, char* argv[])
 	/////////---------------------Tx-RX flow ----------------------------------------------------------------------------------
 	while (1) {
 
-
 		if (socket_initialize(&wsaData) != NO_ERROR) {
 			printf(MSG_ERR_WSASTARTUP);
 			return 1;
 		}
 		sockfd_sender = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sockfd_sender == INVALID_SOCKET){
-			printf("Error, invalid socket\n");
+			printf(MSG_ERR_CREATE_SOCK);
 		}
 		sockfd_recv = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sockfd_recv == INVALID_SOCKET) {
-			printf("Error, invalid socket\n");
+			printf(MSG_ERR_CREATE_SOCK);
 		}
 		status = socket_listen(&sockfd_sender, &channel_addr, CHANNEL_PORT_SENDER);
 		if (status != STATUS_SUCCESS) {
@@ -120,59 +105,45 @@ int main(int argc, char* argv[])
 		len_recv = sizeof(&receiver_addr);
 
 		// Accept the data packet from client and verification
-	
 		// both sender and receiver must be connected at the same time in order for this to work!
-		printd("Waiting for sender - accept()...\n");
+	ACCEPT_SEND:
 		accept_res_sender = accept(sockfd_sender, NULL, NULL);
-		printd("Waiting for receiver - accept()...\n");
+	ACCEPT_RECV:
 		accept_res_recv = accept(sockfd_recv, NULL, NULL);
 
 		if (accept_res_sender < 0) {
-			printf("Sender is not connected! Aborting.\n");
+			printf(MSG_ERR_SOCK_ACCEPT);
+			goto ACCEPT_SEND;
 		}
 
 		if (accept_res_recv   < 0) {
-			printf("Receiver is not connected! Aborting.\n");
+			printf(MSG_ERR_SOCK_ACCEPT);
+			goto ACCEPT_RECV;
 		}
 
-		if ((accept_res_sender < 0) || (accept_res_recv < 0)) {
-			printf("See error (WSA error): %ld\n", WSAGetLastError());
-			return 1; // FIXME - if this happens, we might wanna just go back to the beginning of the loop
-		}
-	
-		printd("Sender and receiver connected!\n");
-		// at this point, we assume both are connected
 
-
-		// 
-		//FD_ZERO(&readfds);
-		//FD_SET(sockfd_sender, &readfds);
-		//FD_SET(sockfd_recv, &readfds);
-		//sock_avl = select(max(sockfd_recv, sockfd_sender) +1, &readfds, NULL, NULL, &tm);
-
-		//if (sock_avl < 0) {
-		//	printf("Could not select\n");
-		//	return EXIT_FAILURE;
-		//}
-
-		if (1) {//if (FD_ISSET(sockfd_sender, &readfds)) { //receiving data from client
+		if (1) {
 				cur_count = 1;
 				while (cur_count != 0) {
-					printd("Waiting to receive from sender\n");
 					cur_count = recv(accept_res_sender, &buffer, 31, 0);
-					//safe_recv(&sockfd_sender, buffer, 1);
-					printd("cur_count = %d\n", cur_count);
+					if (cur_count == SOCKET_ERROR) {
+						printf(MSG_ERR_RECEIVE);
+					}
 					countTot += cur_count;
 					if (channel_mode == RANDOM) {
 						double probabilty = atoi(argv[2]) / pow(2, 16);
 						if (probabilty > 1) probabilty = 1;
 						flipped_bits += fake_noise_random(buffer, probabilty, atoi(argv[3]));
-						send(accept_res_recv, buffer, cur_count, 0);
+						if (send(accept_res_recv, buffer, cur_count, 0) == SOCKET_ERROR) {
+							printf(MSG_ERR_SEND);
+						}
 					}
 					else if (channel_mode == DETERMINISTIC)
 					{
 						flipped_bits += fake_noise_determ(buffer, argv[2]);
-						send(accept_res_recv, buffer, cur_count, 0);
+						if (send(accept_res_recv, buffer, cur_count, 0) == SOCKET_ERROR) {
+							printf(MSG_ERR_SEND);
+						}
 					}
 					else if (channel_mode == NONE) {
 						// no noise
@@ -182,13 +153,17 @@ int main(int argc, char* argv[])
 						//}
 						flipped_bits += 0;
 						send(accept_res_recv, buffer, cur_count, 0);
+						if (send(accept_res_recv, buffer, cur_count, 0) == SOCKET_ERROR) {
+							printf(MSG_ERR_SEND);
+						}
 					}
 			}
+			printf(MSG_TRANSMIT_CHANNEL, countTot, flipped_bits);
+
 			closesocket(accept_res_sender);
 			closesocket(accept_res_recv);
 			closesocket(sockfd_sender);
 			closesocket(sockfd_recv);
-			
 			char next;
 			bit keep_question_loop = 1;
 			bit should_break;
@@ -208,7 +183,6 @@ int main(int argc, char* argv[])
 				}
 			}
 			if (should_break == 1) break;
-
 		}
 
 
@@ -223,31 +197,31 @@ int main(int argc, char* argv[])
 void check_args(int argc, char* argv[])
 {
 	if (!((argc==3) || (argc==4))) {
-		perror("wrong number of arguments, channel requiers 2 or 3 arguments.");
+		printf(MSG_ERR_ARGS_NUM);
 		exit(EXIT_FAILURE);
 	}
 	if ((strcmp(argv[1], "-r") != 0) && (strcmp(argv[1], "-d") != 0)) {
-		perror("wrong argument, must choose the noise method");
+		printf(MSG_ERR_ARGS_NOISE);
 		exit(EXIT_FAILURE);
 	}
 	if (argc == 4) {
 		if (!is_number(argv[3])) {
-			perror("random seed has to be a number");
+			printf(MSG_ERR_ARGS_SEED);
 			exit(EXIT_FAILURE);
 		}
 		if (!is_number(argv[2])) {
-			perror("probabilty has to be a number");
+			printf(MSG_ERR_ARGS_PROB);
 		}
 		if (atoi(argv[2]) > pow(2, 16) || atoi(argv[3]) < 0)
 		{
-			perror("p/2^16 is in range 0-1");
+			printf(MSG_ERR_ARGS_P_RANGE);
 			exit(EXIT_FAILURE);
 		}
 	}
 	else
 		if (!is_number(argv[2]) && atoi(argv[2]) > 0)
 		{
-			perror("length of cycle nust be positive integer");
+			printf(MSG_ERR_ARGS_CYCLE);
 			exit(EXIT_FAILURE);
 		}
 }
@@ -287,6 +261,7 @@ int fake_noise_random(char* buffer, double p, unsigned int seed) {
 	return count;
 }
 
+
 int fake_noise_determ(char* buffer, int n)
 {
 	int mask = 1;
@@ -306,28 +281,3 @@ int fake_noise_determ(char* buffer, int n)
 	return count;
 }
 
-void open_socket(SOCKET* new_sock, struct sockaddr_in* sock_add, int port)
-{
-	*new_sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (*new_sock == -1) {
-		printf(MSG_ERR_CREATE_SOCK);
-		exit(EXIT_FAILURE);
-	}
-	else printd("Socket successfully created..\n");
-	sock_add->sin_family = AF_INET;
-	sock_add->sin_addr.s_addr = htonl(INADDR_ANY);
-	sock_add->sin_port = htons(port);
-	if ((bind(*new_sock, (SA*)&sock_add, sizeof(sock_add))) != 0) {
-		printf(MSG_ERR_SOCK_BIND, port);
-		exit(0);
-	}
-	else
-		printd("Socket successfully binded..\n");
-	if ((listen(*new_sock, 5)) != 0) {
-		printd("Listen failed...\n");
-		exit(0);
-	}
-	else
-		printd("Server listening..\n");
-	return;
-}
