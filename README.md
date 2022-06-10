@@ -1,5 +1,9 @@
 This project is an assignment I was given in one of my courses
 
+- It performs file transfer through a relay server
+
+- Files are encoded before sending with (31, 26) hamming code, and decoded by the receiver
+
 `FileTransferChannel` - acts as a relay / middleman server for transferring files
 
 `FileTransferSender` - connects to Channel, then sends files as prompted by user
